@@ -149,7 +149,7 @@ class Inline:
                 [
                     self.ikb(
                         text=lang["source"],
-                        url="https://t.me/MR_KALVAN",
+                        url="https://t.me/Subtractionn",
                         style=ButtonStyle.DANGER,
                     )
                 ]
