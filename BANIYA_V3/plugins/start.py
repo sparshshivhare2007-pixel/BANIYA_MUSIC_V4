@@ -106,7 +106,6 @@ async def start(_, message: types.Message):
             await message.reply_text(
                 text=_text,
                 reply_markup=key,
-                disable_web_page_preview=True,
             )
             logger.info("[START] Fallback text message sent (photo failed).")
         except Exception as e2:
