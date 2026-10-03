@@ -1,33 +1,66 @@
-﻿# Authored By Certified Coders © 2025
+# Authored By Certified Coders © 2025
 import asyncio
 import html
 from typing import List
 
-from pyrogram import Client, enums, filters
+from pyrogram import filters, enums
 from pyrogram.enums import ChatMemberStatus, ChatType
-from pyrogram.errors import FloodWait, ChannelInvalid, ChatAdminRequired, RPCError, UserNotParticipant
-from pyrogram.types import (
-    CallbackQuery,
-    InlineKeyboardButton,
-    InlineKeyboardMarkup,
-    Message,
-)
+from pyrogram.errors import (FloodWait, ChannelInvalid, ChatAdminRequired,
+                             RPCError, UserNotParticipant)
+from pyrogram.types import (CallbackQuery, InlineKeyboardButton,
+                            InlineKeyboardMarkup, Message)
 
-from BANIYA_V3 import app
-from BANIYA_V3.utils.admin_check import is_admin
+from BANIYA_V3 import app, config
 
-chatQueue: set[int] = set()
-stopProcess: dict[int, bool] = {}
 
+# ────────────────────────────────────────────────────────────
+# is_admin helper (khud define)
+# ────────────────────────────────────────────────────────────
+async def is_admin(message_or_cq) -> bool:
+    """Check karta hai ki user admin hai ya nahi"""
+    try:
+        if isinstance(message_or_cq, CallbackQuery):
+            chat_id = message_or_cq.message.chat.id
+            user_id = message_or_cq.from_user.id
+        else:
+            chat_id = message_or_cq.chat.id
+            user_id = message_or_cq.from_user.id
+
+        # Owner / sudo bypass
+        if user_id in config.OWNER_ID or user_id in app.sudoers:
+            return True
+
+        member = await app.get_chat_member(chat_id, user_id)
+        return member.status in (
+            ChatMemberStatus.ADMINISTRATOR,
+            ChatMemberStatus.OWNER,
+        )
+    except Exception:
+        return False
+
+
+# ────────────────────────────────────────────────────────────
+# Global state
+# ────────────────────────────────────────────────────────────
+chatQueue: set = set()
+stopProcess: dict = {}
+
+
+# ────────────────────────────────────────────────────────────
+# Utility helpers
+# ────────────────────────────────────────────────────────────
 def _in_group(msg: Message) -> bool:
     return msg.chat and msg.chat.type in (ChatType.GROUP, ChatType.SUPERGROUP)
+
 
 def _in_channel(msg: Message) -> bool:
     return msg.chat and msg.chat.type == ChatType.CHANNEL
 
+
 def _mention_html(user) -> str:
     name = html.escape((user.first_name or "User").strip())
     return f'<a href="tg://user?id={user.id}">{name}</a>'
+
 
 async def _bot_is_admin(chat_id: int) -> bool:
     try:
@@ -35,6 +68,7 @@ async def _bot_is_admin(chat_id: int) -> bool:
         return me.status == ChatMemberStatus.ADMINISTRATOR
     except (UserNotParticipant, RPCError):
         return False
+
 
 async def scan_deleted_members(chat_id: int) -> List:
     users = []
@@ -46,28 +80,35 @@ async def scan_deleted_members(chat_id: int) -> List:
         return []
     return users
 
+
 async def scan_bots(chat_id: int) -> List:
     bots = []
     try:
-        async for member in app.get_chat_members(chat_id, filter=enums.ChatMembersFilter.BOTS):
+        async for member in app.get_chat_members(
+            chat_id, filter=enums.ChatMembersFilter.BOTS
+        ):
             bots.append(member.user)
     except (ChannelInvalid, ChatAdminRequired, UserNotParticipant):
         return []
     return bots
+
 
 async def get_channel_stats(chat_id: int):
     try:
         chat = await app.get_chat(chat_id)
         members_count = chat.members_count or 0
         return chat, members_count
-    except:
+    except Exception:
         return None, 0
+
 
 async def safe_edit(msg: Message, text: str, reply_markup=None):
     max_retries = 3
     for attempt in range(max_retries):
         try:
-            await msg.edit_text(text, parse_mode=enums.ParseMode.HTML, reply_markup=reply_markup)
+            await msg.edit_text(
+                text, parse_mode=enums.ParseMode.HTML, reply_markup=reply_markup
+            )
             return
         except FloodWait as e:
             if attempt == max_retries - 1:
@@ -75,6 +116,7 @@ async def safe_edit(msg: Message, text: str, reply_markup=None):
             await asyncio.sleep(e.value)
         except Exception:
             break
+
 
 def generate_channel_keyboard(chat_id: int, user_id: int):
     return InlineKeyboardMarkup([
@@ -87,14 +129,19 @@ def generate_channel_keyboard(chat_id: int, user_id: int):
         ]
     ])
 
+
 def generate_group_keyboard(chat_id: int):
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("Clean Zombies", callback_data=f"confirm_zombies:{chat_id}")],
         [InlineKeyboardButton("Cancel", callback_data="cancel_zombies")]
     ])
 
+
+# ────────────────────────────────────────────────────────────
+# /zombies
+# ────────────────────────────────────────────────────────────
 @app.on_message(filters.command(["zombies"]) & (filters.private | filters.group))
-async def zombie_handler(_: Client, message: Message):
+async def zombie_handler(_, message: Message):
     user_id = message.from_user.id
     args = message.text.split()
     target_id = None
@@ -120,8 +167,11 @@ async def zombie_handler(_: Client, message: Message):
 
     await zombie_group_scan(_, message)
 
-async def zombie_channel_scan(_: Client, message: Message, channel_id: int, user_id: int):
-    status_msg = await message.reply_text("<i>Checking access...</i>", parse_mode=enums.ParseMode.HTML)
+
+async def zombie_channel_scan(_, message: Message, channel_id: int, user_id: int):
+    status_msg = await message.reply_text(
+        "<i>Checking access...</i>", parse_mode=enums.ParseMode.HTML
+    )
 
     chat, members_count = await get_channel_stats(channel_id)
     if not chat:
@@ -153,7 +203,8 @@ async def zombie_channel_scan(_: Client, message: Message, channel_id: int, user
         parse_mode=enums.ParseMode.HTML
     )
 
-async def zombie_group_scan(_: Client, message: Message):
+
+async def zombie_group_scan(_, message: Message):
     if not await is_admin(message):
         return await message.reply_text(
             "<i>Only admins can use this.</i>",
@@ -183,13 +234,17 @@ async def zombie_group_scan(_: Client, message: Message):
         parse_mode=enums.ParseMode.HTML
     )
 
+
+# ────────────────────────────────────────────────────────────
+# Callbacks
+# ────────────────────────────────────────────────────────────
 @app.on_callback_query(filters.regex(r"^clean_zombies:"))
-async def clean_zombies_channel(_: Client, cq: CallbackQuery):
+async def clean_zombies_channel(_, cq: CallbackQuery):
     try:
         _, chat_id_str, user_id_str = cq.data.split(":")
         chat_id = int(chat_id_str)
         user_id = int(user_id_str)
-    except:
+    except Exception:
         return await cq.answer("Invalid data.", show_alert=True)
 
     if cq.from_user.id != user_id:
@@ -217,6 +272,7 @@ async def clean_zombies_channel(_: Client, cq: CallbackQuery):
     )
 
     removed = 0
+
     async def ban_user(uid: int) -> bool:
         max_retries = 3
         for attempt in range(max_retries):
@@ -227,7 +283,7 @@ async def clean_zombies_channel(_: Client, cq: CallbackQuery):
                 if attempt == max_retries - 1:
                     return False
                 await asyncio.sleep(e.value)
-            except:
+            except Exception:
                 return False
         return False
 
@@ -252,13 +308,14 @@ async def clean_zombies_channel(_: Client, cq: CallbackQuery):
         reply_markup=keyboard
     )
 
+
 @app.on_callback_query(filters.regex(r"^clean_bots:"))
-async def clean_bots_channel(_: Client, cq: CallbackQuery):
+async def clean_bots_channel(_, cq: CallbackQuery):
     try:
         _, chat_id_str, user_id_str = cq.data.split(":")
         chat_id = int(chat_id_str)
         user_id = int(user_id_str)
-    except:
+    except Exception:
         return await cq.answer("Invalid data.", show_alert=True)
 
     if cq.from_user.id != user_id:
@@ -286,6 +343,7 @@ async def clean_bots_channel(_: Client, cq: CallbackQuery):
     )
 
     removed = 0
+
     async def ban_user(uid: int) -> bool:
         max_retries = 3
         for attempt in range(max_retries):
@@ -296,7 +354,7 @@ async def clean_bots_channel(_: Client, cq: CallbackQuery):
                 if attempt == max_retries - 1:
                     return False
                 await asyncio.sleep(e.value)
-            except:
+            except Exception:
                 return False
         return False
 
@@ -321,24 +379,29 @@ async def clean_bots_channel(_: Client, cq: CallbackQuery):
         reply_markup=keyboard
     )
 
+
 @app.on_callback_query(filters.regex(r"^close_panel:"))
-async def close_panel(_: Client, cq: CallbackQuery):
+async def close_panel(_, cq: CallbackQuery):
     try:
         _, user_id_str = cq.data.split(":")
         user_id = int(user_id_str)
-    except:
+    except Exception:
         return await cq.answer("Error.", show_alert=True)
 
     if cq.from_user.id != user_id:
         return await cq.answer("Not your panel.", show_alert=True)
 
-    await cq.message.delete()
+    try:
+        await cq.message.delete()
+    except Exception:
+        pass
+
 
 @app.on_callback_query(filters.regex(r"^confirm_zombies:"))
-async def execute_zombie_cleanup(_: Client, cq: CallbackQuery):
+async def execute_zombie_cleanup(_, cq: CallbackQuery):
     try:
         chat_id = int(cq.data.split(":")[1])
-    except:
+    except Exception:
         return await cq.answer("Invalid data.", show_alert=True)
 
     if not await is_admin(cq):
@@ -353,7 +416,9 @@ async def execute_zombie_cleanup(_: Client, cq: CallbackQuery):
     zombies = await scan_deleted_members(chat_id)
     total = len(zombies)
 
-    status = await cq.edit_message_text(f"<i>Starting cleanup...</i>", parse_mode=enums.ParseMode.HTML)
+    status = await cq.edit_message_text(
+        f"<i>Starting cleanup...</i>", parse_mode=enums.ParseMode.HTML
+    )
     removed = 0
 
     async def ban_user(uid):
@@ -366,7 +431,7 @@ async def execute_zombie_cleanup(_: Client, cq: CallbackQuery):
                 if attempt == max_retries - 1:
                     return False
                 await asyncio.sleep(e.value)
-            except:
+            except Exception:
                 return False
         return False
 
@@ -385,8 +450,11 @@ async def execute_zombie_cleanup(_: Client, cq: CallbackQuery):
 
     await safe_edit(status, f"<i>Cleanup complete: <code>{removed}</code> removed.</i>")
 
+
 @app.on_callback_query(filters.regex(r"^cancel_zombies$"))
-async def cancel_zombie_cleanup(_: Client, cq: CallbackQuery):
+async def cancel_zombie_cleanup(_, cq: CallbackQuery):
     chat_id = cq.message.chat.id
     stopProcess[chat_id] = True
-    await cq.edit_message_text("<i>Cancelled.</i>", parse_mode=enums.ParseMode.HTML)
+    await cq.edit_message_text(
+        "<i>Cancelled.</i>", parse_mode=enums.ParseMode.HTML
+    )
