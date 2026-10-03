@@ -1,82 +1,120 @@
-﻿# Authored By Certified Coders © 2025
+# Authored By Certified Coders © 2025
 from pyrogram import filters
-from pyrogram.enums import ChatType
+from pyrogram.enums import ChatType, ChatMemberStatus
 from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
+
 from BANIYA_V3 import app
-from BANIYA_V3.utils.admin_filters import admin_filter
 
-# ------------------- Utility Functions ------------------- #
 
+# ────────────────────────────────────────────────────────────
+# admin_filter (khud define)
+# ────────────────────────────────────────────────────────────
+async def _admin_filter_func(_, __, message: Message) -> bool:
+    try:
+        member = await message._client.get_chat_member(
+            message.chat.id, message.from_user.id
+        )
+        return member.status in (
+            ChatMemberStatus.ADMINISTRATOR,
+            ChatMemberStatus.OWNER,
+        )
+    except Exception:
+        return False
+
+
+admin_filter = filters.create(_admin_filter_func)
+
+
+# ────────────────────────────────────────────────────────────
+# Utility Functions
+# ────────────────────────────────────────────────────────────
 def is_group(message: Message) -> bool:
     return message.chat.type not in (ChatType.PRIVATE, ChatType.BOT)
+
 
 async def has_permission(user_id: int, chat_id: int, permission: str) -> bool:
     try:
         member = await app.get_chat_member(chat_id, user_id)
-        return bool(getattr(getattr(member, "privileges", None), permission, False) or getattr(member, "status", "") in ("creator",))
+        priv = getattr(member, "privileges", None)
+        if priv and getattr(priv, permission, False):
+            return True
+        return getattr(member, "status", "") == ChatMemberStatus.OWNER
     except Exception:
         return False
 
+
 def _view_btn(msg: Message):
     try:
-        return InlineKeyboardMarkup([[InlineKeyboardButton("📝 ᴠɪᴇᴡ ᴍᴇssᴀɢᴇ", url=msg.link)]])
+        return InlineKeyboardMarkup([[
+            InlineKeyboardButton("📝 View Message", url=msg.link)
+        ]])
     except Exception:
         return None
 
-# ------------------- Pin Message ------------------- #
 
-@app.on_message(filters.command("pin") & admin_filter)
+# ────────────────────────────────────────────────────────────
+# /pin
+# ────────────────────────────────────────────────────────────
+@app.on_message(filters.command("pin") & filters.group & admin_filter)
 async def pin(_, message: Message):
     if not is_group(message):
-        return await message.reply_text("**ᴛʜɪs ᴄᴏᴍᴍᴀɴᴅ ᴡᴏʀᴋs ᴏɴʟʏ ɪɴ ɢʀᴏᴜᴘs!**")
+        return await message.reply_text("**This command only works in groups!**")
 
     if not message.reply_to_message:
-        return await message.reply_text("**ʀᴇᴘʟʏ ᴛᴏ ᴀ ᴍᴇssᴀɢᴇ ᴛᴏ ᴘɪɴ ɪᴛ!**")
+        return await message.reply_text("**Reply to a message to pin it!**")
 
     if not await has_permission(message.from_user.id, message.chat.id, "can_pin_messages"):
-        return await message.reply_text("**ʏᴏᴜ ᴅᴏɴ'ᴛ ʜᴀᴠᴇ ᴘᴇʀᴍɪssɪᴏɴ ᴛᴏ ᴘɪɴ ᴍᴇssᴀɢᴇs.**")
+        return await message.reply_text("**You don't have permission to pin messages.**")
 
     try:
         await message.reply_to_message.pin()
         await message.reply_text(
-            f"**sᴜᴄᴄᴇssғᴜʟʟʏ ᴘɪɴɴᴇᴅ ᴍᴇssᴀɢᴇ!**\n\n**ᴄʜᴀᴛ:** {message.chat.title}\n**ᴀᴅᴍɪɴ:** {message.from_user.mention}",
+            f"**Successfully pinned message!**\n\n"
+            f"**Chat:** {message.chat.title}\n"
+            f"**Admin:** {message.from_user.mention}",
             reply_markup=_view_btn(message.reply_to_message)
         )
     except Exception as e:
-        await message.reply_text(f"**ғᴀɪʟᴇᴅ ᴛᴏ ᴘɪɴ ᴍᴇssᴀɢᴇ:**\n`{e}`")
+        await message.reply_text(f"**Failed to pin message:**\n`{e}`")
 
-# ------------------- Unpin Message ------------------- #
 
-@app.on_message(filters.command("unpin") & admin_filter)
+# ────────────────────────────────────────────────────────────
+# /unpin
+# ────────────────────────────────────────────────────────────
+@app.on_message(filters.command("unpin") & filters.group & admin_filter)
 async def unpin(_, message: Message):
     if not is_group(message):
-        return await message.reply_text("**ᴛʜɪs ᴄᴏᴍᴍᴀɴᴅ ᴡᴏʀᴋs ᴏɴʟʏ ɪɴ ɢʀᴏᴜᴘs!**")
+        return await message.reply_text("**This command only works in groups!**")
 
     if not message.reply_to_message:
-        return await message.reply_text("**ʀᴇᴘʟʏ ᴛᴏ ᴀ ᴍᴇssᴀɢᴇ ᴛᴏ ᴜɴᴘɪɴ ɪᴛ!**")
+        return await message.reply_text("**Reply to a message to unpin it!**")
 
     if not await has_permission(message.from_user.id, message.chat.id, "can_pin_messages"):
-        return await message.reply_text("**ʏᴏᴜ ᴅᴏɴ'ᴛ ʜᴀᴠᴇ ᴘᴇʀᴍɪssɪᴏɴ ᴛᴏ ᴜɴᴘɪɴ ᴍᴇssᴀɢᴇs.**")
+        return await message.reply_text("**You don't have permission to unpin messages.**")
 
     try:
         await message.reply_to_message.unpin()
         await message.reply_text(
-            f"**sᴜᴄᴄᴇssғᴜʟʟʏ ᴜɴᴘɪɴɴᴇᴅ ᴍᴇssᴀɢᴇ!**\n\n**ᴄʜᴀᴛ:** {message.chat.title}\n**ᴀᴅᴍɪɴ:** {message.from_user.mention}",
+            f"**Successfully unpinned message!**\n\n"
+            f"**Chat:** {message.chat.title}\n"
+            f"**Admin:** {message.from_user.mention}",
             reply_markup=_view_btn(message.reply_to_message)
         )
     except Exception as e:
-        await message.reply_text(f"**ғᴀɪʟᴇᴅ ᴛᴏ ᴜɴᴘɪɴ ᴍᴇssᴀɢᴇ:**\n`{e}`")
+        await message.reply_text(f"**Failed to unpin message:**\n`{e}`")
 
-# ------------------- Set / Remove Photo, Title, Description ------------------- #
 
-@app.on_message(filters.command("setphoto") & admin_filter)
+# ────────────────────────────────────────────────────────────
+# /setphoto
+# ────────────────────────────────────────────────────────────
+@app.on_message(filters.command("setphoto") & filters.group & admin_filter)
 async def set_photo(_, message: Message):
     if not is_group(message):
-        return await message.reply_text("**ᴛʜɪs ᴄᴏᴍᴍᴀɴᴅ ᴡᴏʀᴋs ᴏɴʟʏ ɪɴ ɢʀᴏᴜᴘs!**")
+        return await message.reply_text("**This command only works in groups!**")
     if not message.reply_to_message:
-        return await message.reply_text("**ʀᴇᴘʟʏ ᴛᴏ ᴀ ᴘʜᴏᴛᴏ ᴏʀ ᴅᴏᴄᴜᴍᴇɴᴛ.**")
+        return await message.reply_text("**Reply to a photo or image document.**")
     if not await has_permission(message.from_user.id, message.chat.id, "can_change_info"):
-        return await message.reply_text("**ʏᴏᴜ ʟᴀᴄᴋ ᴘᴇʀᴍɪssɪᴏɴ ᴛᴏ ᴄʜᴀɴɢᴇ ɢʀᴏᴜᴘ ɪɴғᴏ.**")
+        return await message.reply_text("**You don't have permission to change group info.**")
 
     target = message.reply_to_message
     file_id = None
@@ -88,32 +126,44 @@ async def set_photo(_, message: Message):
             file_id = target.document.file_id
 
     if not file_id:
-        return await message.reply_text("**ᴘʟᴇᴀsᴇ ʀᴇᴘʟʏ ᴡɪᴛʜ ᴀɴ ɪᴍᴀɢᴇ (ᴘʜᴏᴛᴏ ᴏʀ ɪᴍᴀɢᴇ ᴅᴏᴄᴜᴍᴇɴᴛ).**")
+        return await message.reply_text("**Please reply to an image (photo or image document).**")
 
     try:
         await app.set_chat_photo(chat_id=message.chat.id, photo=file_id)
-        await message.reply_text(f"**ɢʀᴏᴜᴘ ᴘʜᴏᴛᴏ ᴜᴘᴅᴀᴛᴇᴅ sᴜᴄᴄᴇssғᴜʟʟʏ!**\nʙʏ {message.from_user.mention}")
+        await message.reply_text(
+            f"**Group photo updated successfully!**\nBy {message.from_user.mention}"
+        )
     except Exception as e:
-        await message.reply_text(f"**ғᴀɪʟᴇᴅ ᴛᴏ sᴇᴛ ᴘʜᴏᴛᴏ:**\n`{e}`")
+        await message.reply_text(f"**Failed to set photo:**\n`{e}`")
 
-@app.on_message(filters.command("removephoto") & admin_filter)
+
+# ────────────────────────────────────────────────────────────
+# /removephoto
+# ────────────────────────────────────────────────────────────
+@app.on_message(filters.command("removephoto") & filters.group & admin_filter)
 async def remove_photo(_, message: Message):
     if not is_group(message):
-        return await message.reply_text("**ᴛʜɪs ᴄᴏᴍᴍᴀɴᴅ ᴡᴏʀᴋs ᴏɴʟʏ ɪɴ ɢʀᴏᴜᴘs!**")
+        return await message.reply_text("**This command only works in groups!**")
     if not await has_permission(message.from_user.id, message.chat.id, "can_change_info"):
-        return await message.reply_text("**ʏᴏᴜ ʟᴀᴄᴋ ᴘᴇʀᴍɪssɪᴏɴ ᴛᴏ ᴄʜᴀɴɢᴇ ɢʀᴏᴜᴘ ɪɴғᴏ.**")
+        return await message.reply_text("**You don't have permission to change group info.**")
     try:
         await app.delete_chat_photo(message.chat.id)
-        await message.reply_text(f"**ɢʀᴏᴜᴘ ᴘʜᴏᴛᴏ ʀᴇᴍᴏᴠᴇᴅ!**\nʙʏ {message.from_user.mention}")
+        await message.reply_text(
+            f"**Group photo removed!**\nBy {message.from_user.mention}"
+        )
     except Exception as e:
-        await message.reply_text(f"**ғᴀɪʟᴇᴅ ᴛᴏ ʀᴇᴍᴏᴠᴇ ᴘʜᴏᴛᴏ:**\n`{e}`")
+        await message.reply_text(f"**Failed to remove photo:**\n`{e}`")
 
-@app.on_message(filters.command("settitle") & admin_filter)
+
+# ────────────────────────────────────────────────────────────
+# /settitle
+# ────────────────────────────────────────────────────────────
+@app.on_message(filters.command("settitle") & filters.group & admin_filter)
 async def set_title(_, message: Message):
     if not is_group(message):
-        return await message.reply_text("**ᴛʜɪs ᴄᴏᴍᴍᴀɴᴅ ᴡᴏʀᴋs ᴏɴʟʏ ɪɴ ɢʀᴏᴜᴘs!**")
+        return await message.reply_text("**This command only works in groups!**")
     if not await has_permission(message.from_user.id, message.chat.id, "can_change_info"):
-        return await message.reply_text("**ʏᴏᴜ ʟᴀᴄᴋ ᴘᴇʀᴍɪssɪᴏɴ ᴛᴏ ᴄʜᴀɴɢᴇ ɢʀᴏᴜᴘ ɪɴғᴏ.**")
+        return await message.reply_text("**You don't have permission to change group info.**")
 
     title = None
     if len(message.command) > 1:
@@ -122,21 +172,26 @@ async def set_title(_, message: Message):
         title = message.reply_to_message.text.strip()
 
     if not title:
-        return await message.reply_text("**ᴘʟᴇᴀsᴇ ᴘʀᴏᴠɪᴅᴇ ᴀ ɴᴇᴡ ᴛɪᴛʟᴇ.**")
+        return await message.reply_text("**Please provide a new title.**")
 
     try:
         await message.chat.set_title(title)
-        await message.reply_text(f"**ɢʀᴏᴜᴘ ɴᴀᴍᴇ ᴄʜᴀɴɢᴇᴅ ᴛᴏ:** {title}\nʙʏ {message.from_user.mention}")
+        await message.reply_text(
+            f"**Group title changed to:** {title}\nBy {message.from_user.mention}"
+        )
     except Exception as e:
-        await message.reply_text(f"**ғᴀɪʟᴇᴅ ᴛᴏ sᴇᴛ ᴛɪᴛʟᴇ:**\n`{e}`")
+        await message.reply_text(f"**Failed to set title:**\n`{e}`")
 
 
-@app.on_message(filters.command("setdiscription") & admin_filter)
+# ────────────────────────────────────────────────────────────
+# /setdiscription (ya /setdescription)
+# ────────────────────────────────────────────────────────────
+@app.on_message(filters.command(["setdiscription", "setdescription"]) & filters.group & admin_filter)
 async def set_description(_, message: Message):
     if not is_group(message):
-        return await message.reply_text("**ᴛʜɪs ᴄᴏᴍᴍᴀɴᴅ ᴡᴏʀᴋs ᴏɴʟʏ ɪɴ ɢʀᴏᴜᴘs!**")
+        return await message.reply_text("**This command only works in groups!**")
     if not await has_permission(message.from_user.id, message.chat.id, "can_change_info"):
-        return await message.reply_text("**ʏᴏᴜ ʟᴀᴄᴋ ᴘᴇʀᴍɪssɪᴏɴ ᴛᴏ ᴄʜᴀɴɢᴇ ɢʀᴏᴜᴘ ɪɴғᴏ.**")
+        return await message.reply_text("**You don't have permission to change group info.**")
 
     desc = None
     if len(message.command) > 1:
@@ -145,10 +200,12 @@ async def set_description(_, message: Message):
         desc = message.reply_to_message.text.strip()
 
     if not desc:
-        return await message.reply_text("**ᴘʟᴇᴀsᴇ ᴘʀᴏᴠɪᴅᴇ ᴀ ɴᴇᴡ ᴅᴇsᴄʀɪᴘᴛɪᴏɴ.**")
+        return await message.reply_text("**Please provide a new description.**")
 
     try:
         await message.chat.set_description(desc)
-        await message.reply_text(f"**ɢʀᴏᴜᴘ ᴅᴇsᴄʀɪᴘᴛɪᴏɴ ᴜᴘᴅᴀᴛᴇᴅ!**\nʙʏ {message.from_user.mention}")
+        await message.reply_text(
+            f"**Group description updated!**\nBy {message.from_user.mention}"
+        )
     except Exception as e:
-        await message.reply_text(f"**ғᴀɪʟᴇᴅ ᴛᴏ sᴇᴛ ᴅᴇsᴄʀɪᴘᴛɪᴏɴ:**\n`{e}`")
+        await message.reply_text(f"**Failed to set description:**\n`{e}`")
