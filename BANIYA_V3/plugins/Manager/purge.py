@@ -1,12 +1,30 @@
-﻿# Authored By Certified Coders © 2025
+# Authored By Certified Coders © 2025
 import asyncio
-from pyrogram import Client, filters
-from pyrogram.enums import ChatType
+from pyrogram import filters
+from pyrogram.enums import ChatType, ChatMemberStatus
 from pyrogram.errors import MessageDeleteForbidden, RPCError, FloodWait
 from pyrogram.types import Message
 
 from BANIYA_V3 import app
-from BANIYA_V3.utils.admin_filters import admin_filter
+
+
+# ────────────────────────────────────────────────────────────
+# admin_filter (khud define)
+# ────────────────────────────────────────────────────────────
+async def _admin_filter_func(_, __, message: Message) -> bool:
+    try:
+        member = await message._client.get_chat_member(
+            message.chat.id, message.from_user.id
+        )
+        return member.status in (
+            ChatMemberStatus.ADMINISTRATOR,
+            ChatMemberStatus.OWNER,
+        )
+    except Exception:
+        return False
+
+
+admin_filter = filters.create(_admin_filter_func)
 
 
 def divide_chunks(l: list, n: int = 100):
@@ -14,13 +32,20 @@ def divide_chunks(l: list, n: int = 100):
         yield l[i: i + n]
 
 
-@app.on_message(filters.command("purge") & admin_filter)
-async def purge(app: Client, msg: Message):
+# ────────────────────────────────────────────────────────────
+# /purge
+# ────────────────────────────────────────────────────────────
+@app.on_message(filters.command("purge") & filters.group & admin_filter)
+async def purge(client, msg: Message):
     if msg.chat.type != ChatType.SUPERGROUP:
-        return await msg.reply("**ɪ ᴄᴀɴ'ᴛ ᴘᴜʀɢᴇ ᴍᴇssᴀɢᴇs ɪɴ ᴀ ʙᴀsɪᴄ ɢʀᴏᴜᴘ. ᴘʟᴇᴀsᴇ ᴄᴏɴᴠᴇʀᴛ ɪᴛ ᴛᴏ ᴀ sᴜᴘᴇʀɢʀᴏᴜᴘ.**")
+        return await msg.reply(
+            "**❌ This command only works in supergroups. Please convert your group to a supergroup first.**"
+        )
 
     if not msg.reply_to_message:
-        return await msg.reply("**ʀᴇᴘʟʏ ᴛᴏ ᴀ ᴍᴇssᴀɢᴇ ᴛᴏ sᴛᴀʀᴛ ᴘᴜʀɢᴇ!**")
+        return await msg.reply(
+            "**❌ Reply to a message to start purging!**"
+        )
 
     message_ids = list(range(msg.reply_to_message.id, msg.id))
     m_list = list(divide_chunks(message_ids))
@@ -34,22 +59,34 @@ async def purge(app: Client, msg: Message):
                 await asyncio.sleep(e.value)
         await msg.delete()
         count = len(message_ids)
-        confirm = await msg.reply(f"✅ | **ᴅᴇʟᴇᴛᴇᴅ `{count}` ᴍᴇssᴀɢᴇs.**")
+        confirm = await msg.reply(f"✅ | **Deleted `{count}` messages.**")
         await asyncio.sleep(3)
-        await confirm.delete()
+        try:
+            await confirm.delete()
+        except Exception:
+            pass
     except MessageDeleteForbidden:
-        await msg.reply("**ɪ ᴄᴀɴ'ᴛ ᴅᴇʟᴇᴛᴇ ᴍᴇssᴀɢᴇs ɪɴ ᴛʜɪs ᴄʜᴀᴛ. ᴍᴀʏ ʙᴇ ᴛᴏᴏ ᴏʟᴅ ᴏʀ ɴᴏ ʀɪɢʜᴛs.**")
+        await msg.reply(
+            "**❌ I can't delete messages. Maybe I'm not admin or don't have delete permission.**"
+        )
     except RPCError as e:
-        await msg.reply(f"**ᴇʀʀᴏʀ ᴏᴄᴄᴜʀʀᴇᴅ:**\n<code>{e}</code>")
+        await msg.reply(f"**Error occurred:**\n<code>{e}</code>")
 
 
-@app.on_message(filters.command("spurge") & admin_filter)
-async def spurge(app: Client, msg: Message):
+# ────────────────────────────────────────────────────────────
+# /spurge (silent purge)
+# ────────────────────────────────────────────────────────────
+@app.on_message(filters.command("spurge") & filters.group & admin_filter)
+async def spurge(client, msg: Message):
     if msg.chat.type != ChatType.SUPERGROUP:
-        return await msg.reply("**ɪ ᴄᴀɴ'ᴛ ᴘᴜʀɢᴇ ᴍᴇssᴀɢᴇs ɪɴ ᴀ ʙᴀsɪᴄ ɢʀᴏᴜᴘ. ᴘʟᴇᴀsᴇ ᴄᴏɴᴠᴇʀᴛ ɪᴛ ᴛᴏ ᴀ sᴜᴘᴇʀɢʀᴏᴜᴘ.**")
+        return await msg.reply(
+            "**❌ This command only works in supergroups.**"
+        )
 
     if not msg.reply_to_message:
-        return await msg.reply("**ʀᴇᴘʟʏ ᴛᴏ ᴀ ᴍᴇssᴀɢᴇ ᴛᴏ sᴛᴀʀᴛ ᴘᴜʀɢᴇ!**")
+        return await msg.reply(
+            "**❌ Reply to a message to start purging!**"
+        )
 
     message_ids = list(range(msg.reply_to_message.id, msg.id))
     m_list = list(divide_chunks(message_ids))
@@ -63,18 +100,21 @@ async def spurge(app: Client, msg: Message):
                 await asyncio.sleep(e.value)
         await msg.delete()
     except MessageDeleteForbidden:
-        await msg.reply("**ɪ ᴄᴀɴ'ᴛ ᴅᴇʟᴇᴛᴇ ᴍᴇssᴀɢᴇs ɪɴ ᴛʜɪs ᴄʜᴀᴛ.**")
+        await msg.reply("**❌ I can't delete messages. Check my permissions.**")
     except RPCError as e:
-        await msg.reply(f"**ᴇʀʀᴏʀ ᴏᴄᴄᴜʀʀᴇᴅ:**\n<code>{e}</code>")
+        await msg.reply(f"**Error occurred:**\n<code>{e}</code>")
 
 
-@app.on_message(filters.command("del") & admin_filter)
-async def del_msg(app: Client, msg: Message):
+# ────────────────────────────────────────────────────────────
+# /del
+# ────────────────────────────────────────────────────────────
+@app.on_message(filters.command("del") & filters.group & admin_filter)
+async def del_msg(client, msg: Message):
     if msg.chat.type != ChatType.SUPERGROUP:
-        return await msg.reply("**ɪ ᴄᴀɴ'ᴛ ᴘᴜʀɢᴇ ᴍᴇssᴀɢᴇs ɪɴ ᴀ ʙᴀsɪᴄ ɢʀᴏᴜᴘ.**")
+        return await msg.reply("**❌ This command only works in supergroups.**")
 
     if not msg.reply_to_message:
-        return await msg.reply("**ᴡʜᴀᴛ ᴅᴏ ʏᴏᴜ ᴡᴀɴᴛ ᴛᴏ ᴅᴇʟᴇᴛᴇ?**")
+        return await msg.reply("**❓ What do you want to delete?**")
 
     try:
         await msg.delete()
@@ -82,4 +122,4 @@ async def del_msg(app: Client, msg: Message):
     except FloodWait as e:
         await asyncio.sleep(e.value)
     except Exception as e:
-        await msg.reply(f"**ғᴀɪʟᴇᴅ ᴛᴏ ᴅᴇʟᴇᴛᴇ ᴍᴇssᴀɢᴇ:**\n<code>{e}</code>")
+        await msg.reply(f"**Failed to delete message:**\n<code>{e}</code>")
