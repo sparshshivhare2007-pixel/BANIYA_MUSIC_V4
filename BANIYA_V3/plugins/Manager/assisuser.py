@@ -1,20 +1,66 @@
-﻿# Authored By Certified Coders © 2025
+# Authored By Certified Coders © 2025
 import asyncio
-from pyrogram import filters
+
+from pyrogram import filters, enums
 from pyrogram.enums import ChatMemberStatus
 from pyrogram.types import ChatJoinRequest
-from pyrogram.errors import (
-    ChatAdminRequired,
-    UserAlreadyParticipant,
-    UserNotParticipant,
-    ChannelPrivate,
-    FloodWait,
-    PeerIdInvalid,
-    ChatWriteForbidden,
-)
-from BANIYA_V3 import app
-from BANIYA_V3.utils.admin_filters import dev_filter, admin_filter, sudo_filter
-from BANIYA_V3.utils.database import get_assistant
+from pyrogram.errors import (ChatAdminRequired, UserAlreadyParticipant,
+                             UserNotParticipant, ChannelPrivate, FloodWait,
+                             PeerIdInvalid, ChatWriteForbidden)
+
+from BANIYA_V3 import app, db, config
+
+
+# ────────────────────────────────────────────────────────────
+# Filters (khud define)
+# ────────────────────────────────────────────────────────────
+async def _admin_filter_func(_, __, message):
+    try:
+        member = await message._client.get_chat_member(
+            message.chat.id, message.from_user.id
+        )
+        return member.status in (
+            ChatMemberStatus.ADMINISTRATOR,
+            ChatMemberStatus.OWNER,
+        )
+    except Exception:
+        return False
+
+
+async def _sudo_filter_func(_, __, message):
+    try:
+        return message.from_user.id in config.OWNER_ID or message.from_user.id in app.sudoers
+    except Exception:
+        return False
+
+
+async def _dev_filter_func(_, __, message):
+    try:
+        return message.from_user.id in config.OWNER_ID
+    except Exception:
+        return False
+
+
+admin_filter = filters.create(_admin_filter_func)
+sudo_filter = filters.create(_sudo_filter_func)
+dev_filter = filters.create(_dev_filter_func)
+
+
+# ────────────────────────────────────────────────────────────
+# Assistant helper
+# ────────────────────────────────────────────────────────────
+async def get_assistant(chat_id: int):
+    """Aapke project ke db se assistant nikaalta hai.
+    Fallback: userbot.clients[0]
+    """
+    try:
+        return await db.get_assistant(chat_id)
+    except AttributeError:
+        from BANIYA_V3 import userbot
+        for client in userbot.clients:
+            return client
+        raise RuntimeError("No assistant client available.")
+
 
 ACTIVE_STATUSES = {
     ChatMemberStatus.OWNER,
@@ -23,14 +69,16 @@ ACTIVE_STATUSES = {
     ChatMemberStatus.RESTRICTED,
 }
 
+
 async def _is_participant(client, chat_id: int, user_id: int) -> bool:
     try:
         member = await client.get_chat_member(chat_id, user_id)
         return member.status in ACTIVE_STATUSES
     except (UserNotParticipant, PeerIdInvalid):
         return False
-    except Exception as e:
+    except Exception:
         return False
+
 
 async def join_userbot(app, chat_id: int, chat_username: str = None) -> str:
     userbot = await get_assistant(chat_id)
@@ -55,7 +103,7 @@ async def join_userbot(app, chat_id: int, chat_username: str = None) -> str:
             link = await app.create_chat_invite_link(chat_id)
             invite = link.invite_link
         except ChatAdminRequired:
-            return "**❌ I need permission to create invite links or a public @username to add the assistant.**"
+            return "**❌ I need permission to create invite links or a public @username.**"
 
     max_retries = 3
     for attempt in range(max_retries):
@@ -66,14 +114,21 @@ async def join_userbot(app, chat_id: int, chat_username: str = None) -> str:
             return "**🤖 Assistant is already a participant.**"
         except FloodWait as e:
             if attempt == max_retries - 1:
-                return f"**❌ Failed to add assistant after retries:** Flood wait exceeded."
+                return "**❌ Failed: Flood wait exceeded.**"
             await asyncio.sleep(e.value)
         except Exception as e:
             return f"**❌ Failed to add assistant:** `{str(e)}`"
 
+
+# ────────────────────────────────────────────────────────────
+# Join request handler
+# ────────────────────────────────────────────────────────────
 @app.on_chat_join_request()
 async def approve_join_request(client, chat_join_request: ChatJoinRequest):
-    userbot = await get_assistant(chat_join_request.chat.id)
+    try:
+        userbot = await get_assistant(chat_join_request.chat.id)
+    except Exception:
+        return
     if chat_join_request.from_user.id != userbot.id:
         return
 
@@ -97,12 +152,18 @@ async def approve_join_request(client, chat_join_request: ChatJoinRequest):
                 return
 
         try:
-            await client.send_message(chat_id, "**✅ Assistant has been approved and joined the chat.**")
+            await client.send_message(
+                chat_id, "**✅ Assistant has been approved and joined the chat.**"
+            )
         except ChatWriteForbidden:
             pass
-    except Exception as e:
+    except Exception:
         pass
 
+
+# ────────────────────────────────────────────────────────────
+# /userbotjoin
+# ────────────────────────────────────────────────────────────
 @app.on_message(
     filters.command(["userbotjoin", "assistantjoin"], prefixes=[".", "/"])
     & (filters.group | filters.private)
@@ -119,7 +180,7 @@ async def join_group(app, message):
             await status_message.edit_text("**❌ I need to be admin to invite the assistant.**")
             return
     except ChatAdminRequired:
-        await status_message.edit_text("**❌ I don't have permission to check admin status in this chat.**")
+        await status_message.edit_text("**❌ I don't have permission to check admin status.**")
         return
     except Exception as e:
         await status_message.edit_text(f"**❌ Failed to verify permissions:** `{str(e)}`")
@@ -132,6 +193,10 @@ async def join_group(app, message):
     except ChatWriteForbidden:
         pass
 
+
+# ────────────────────────────────────────────────────────────
+# /userbotleave
+# ────────────────────────────────────────────────────────────
 @app.on_message(
     filters.command("userbotleave", prefixes=[".", "/"])
     & filters.group
@@ -162,11 +227,11 @@ async def leave_one(app, message):
                 return
             except FloodWait as e:
                 if attempt == max_retries - 1:
-                    await message.reply("**❌ Failed to leave after retries: Flood wait exceeded.**")
+                    await message.reply("**❌ Failed: Flood wait exceeded.**")
                     return
                 await asyncio.sleep(e.value)
             except ChannelPrivate:
-                await message.reply("**❌ Error: This chat is not accessible or has been deleted.**")
+                await message.reply("**❌ Chat is not accessible.**")
                 return
             except Exception as e:
                 await message.reply(f"**❌ Failed to remove assistant:** `{str(e)}`")
@@ -174,6 +239,10 @@ async def leave_one(app, message):
     except Exception as e:
         await message.reply(f"**❌ Unexpected error:** `{str(e)}`")
 
+
+# ────────────────────────────────────────────────────────────
+# /leaveall
+# ────────────────────────────────────────────────────────────
 @app.on_message(filters.command("leaveall", prefixes=["."]) & dev_filter)
 async def leave_all(app, message):
     left = 0
@@ -182,7 +251,7 @@ async def leave_all(app, message):
     try:
         userbot = await get_assistant(message.chat.id)
         async for dialog in userbot.get_dialogs():
-            if dialog.chat.id == -1002014167331:
+            if dialog.chat.id == message.chat.id:
                 continue
             max_retries = 3
             for attempt in range(max_retries):
@@ -208,7 +277,7 @@ async def leave_all(app, message):
             await asyncio.sleep(0.5)
     except FloodWait as e:
         await asyncio.sleep(e.value)
-    except Exception as e:
+    except Exception:
         pass
     finally:
         try:
