@@ -38,7 +38,7 @@ async def whois_handler(_, message: Message):
             user = message.from_user
 
         loading = await message.reply(
-            "<emoji id='5258274739041883702'>🔍</emoji> <b>Fetching user info...</b>"
+            "<emoji id='6127296324107769784'>✅</emoji> <b>Fetching user info...</b>"
         )
         await asyncio.sleep(0.5)
 
@@ -51,24 +51,28 @@ async def whois_handler(_, message: Message):
         last_seen = get_last_seen(user.status)
         lang = getattr(user, "language_code", "N/A")
 
+        # Premium emoji
+        EMOJI = "<emoji id='6127296324107769784'>✅</emoji>"
+        PROFILE = "<emoji id='6127296324107769784'>✅</emoji>"
+
         text = (
-            f"<emoji id='5258011929993026890'>👤</emoji> <b>User Info</b>\n"
+            f"{EMOJI} <b>User Info</b>\n"
             f"────────────────\n"
-            f"<emoji id='6127296324107769784'>✅</emoji> <b>User ID:</b> <code>{user.id}</code>\n"
-            f"<emoji id='6127296324107769784'>✅</emoji> <b>Name:</b> {name}\n"
-            f"<emoji id='6127296324107769784'>✅</emoji> <b>Username:</b> {username}\n"
-            f"<emoji id='6127296324107769784'>✅</emoji> <b>Last seen:</b> {last_seen}\n"
-            f"<emoji id='6127296324107769784'>✅</emoji> <b>DataCenter ID:</b> {dc_id}\n"
-            f"<emoji id='6127296324107769784'>✅</emoji> <b>Language:</b> {lang}\n"
+            f"{EMOJI} <b>User ID:</b> <code>{user.id}</code>\n"
+            f"{EMOJI} <b>Name:</b> {name}\n"
+            f"{EMOJI} <b>Username:</b> {username}\n"
+            f"{EMOJI} <b>Last seen:</b> {last_seen}\n"
+            f"{EMOJI} <b>DataCenter ID:</b> {dc_id}\n"
+            f"{EMOJI} <b>Language:</b> {lang}\n"
             f"────────────────\n"
-            f"<emoji id='6127296324107769784'>✅</emoji> <b>Verified:</b> {'Yes ✅' if user.is_verified else 'No ❌'}\n"
-            f"<emoji id='6127296324107769784'>✅</emoji> <b>Premium:</b> {'Yes 💎' if user.is_premium else 'No ❌'}\n"
-            f"<emoji id='6127296324107769784'>✅</emoji> <b>Bot:</b> {'Yes 🤖' if user.is_bot else 'No 👤'}\n"
-            f"<emoji id='6127296324107769784'>✅</emoji> <b>Scam:</b> {'Yes ⚠️' if getattr(user, 'is_scam', False) else 'No ✅'}\n"
-            f"<emoji id='6127296324107769784'>✅</emoji> <b>Fake:</b> {'Yes 🎭' if getattr(user, 'is_fake', False) else 'No ✅'}\n"
-            f"<emoji id='6127296324107769784'>✅</emoji> <b>Profile Photo:</b> {'Yes 🌸' if user.photo else 'No ❌'}\n"
+            f"{EMOJI} <b>Verified:</b> {EMOJI if user.is_verified else EMOJI}\n"
+            f"{EMOJI} <b>Premium:</b> {EMOJI if user.is_premium else EMOJI}\n"
+            f"{EMOJI} <b>Bot:</b> {EMOJI if user.is_bot else EMOJI}\n"
+            f"{EMOJI} <b>Scam:</b> {EMOJI if getattr(user, 'is_scam', False) else EMOJI}\n"
+            f"{EMOJI} <b>Fake:</b> {EMOJI if getattr(user, 'is_fake', False) else EMOJI}\n"
+            f"{EMOJI} <b>Profile Photo:</b> {EMOJI if user.photo else EMOJI}\n"
             f"────────────────\n"
-            f"<emoji id='6127296324107769784'>✅</emoji> <b>Bio:</b> <code>{bio}</code>"
+            f"{EMOJI} <b>Bio:</b> <code>{bio}</code>"
         )
 
         profile_url = (
@@ -76,13 +80,14 @@ async def whois_handler(_, message: Message):
             if user.username
             else f"tg://user?id={user.id}"
         )
+
         buttons = InlineKeyboardMarkup([[
             InlineKeyboardButton(
-                "👤 View Profile",
+                f"{EMOJI} View Profile",
                 url=profile_url,
             ),
             InlineKeyboardButton(
-                "📞 Share",
+                f"{EMOJI} Share",
                 url="tg://settings",
             )
         ]])
