@@ -5,8 +5,8 @@ from pyrogram.enums import ChatMemberStatus
 from pyrogram.errors import UserNotParticipant, FloodWait
 from pyrogram.types import Message
 
-from BANIYA_MUSIC_V3 import app
-from BANIYA_MUSIC_V3.utils.admin_filters import admin_filter
+from BANIYA_V3 import app
+from BANIYA_V3.utils.admin_filters import admin_filter
 
 spam_chats = set()
 

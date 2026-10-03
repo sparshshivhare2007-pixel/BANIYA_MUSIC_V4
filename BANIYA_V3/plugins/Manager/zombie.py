@@ -13,8 +13,8 @@ from pyrogram.types import (
     Message,
 )
 
-from BANIYA_MUSIC_V3 import app
-from BANIYA_MUSIC_V3.utils.admin_check import is_admin
+from BANIYA_V3 import app
+from BANIYA_V3.utils.admin_check import is_admin
 
 chatQueue: set[int] = set()
 stopProcess: dict[int, bool] = {}

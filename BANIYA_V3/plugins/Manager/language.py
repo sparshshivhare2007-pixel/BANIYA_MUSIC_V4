@@ -9,9 +9,9 @@ from pyrogram.types import (
     CallbackQuery,
 )
 
-from BANIYA_MUSIC_V3 import app
-from BANIYA_MUSIC_V3.utils.database import get_lang, set_lang
-from BANIYA_MUSIC_V3.utils.decorators import ActualAdminCB, language, languageCB
+from BANIYA_V3 import app
+from BANIYA_V3.utils.database import get_lang, set_lang
+from BANIYA_V3.utils.decorators import ActualAdminCB, language, languageCB
 from config import BANNED_USERS
 from strings import get_string, languages_present
 

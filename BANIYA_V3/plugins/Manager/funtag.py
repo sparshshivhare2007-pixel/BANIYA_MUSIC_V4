@@ -4,9 +4,9 @@ import random
 from pyrogram import filters
 from pyrogram.enums import ChatType
 from pyrogram.errors import FloodWait
-from BANIYA_MUSIC_V3 import app
-from BANIYA_MUSIC_V3.utils.admin_check import is_admin
-from BANIYA_MUSIC_V3.plugins.misc.funtag_messages import (
+from BANIYA_V3 import app
+from BANIYA_V3.utils.admin_check import is_admin
+from BANIYA_V3.plugins.misc.funtag_messages import (
     GN_MESSAGES,
     GM_MESSAGES,
     HI_MESSAGES,

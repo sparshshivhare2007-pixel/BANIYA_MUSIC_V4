@@ -24,8 +24,8 @@ from pyrogram.types import (
 )
 from pyrogram.enums import ChatMemberStatus, ChatMembersFilter
 
-from BANIYA_MUSIC_V3 import app
-from BANIYA_MUSIC_V3.utils.permissions import is_owner_or_sudoer, mention
+from BANIYA_V3 import app
+from BANIYA_V3.utils.permissions import is_owner_or_sudoer, mention
 
 MASS_CMDS = ["kickall", "banall", "unbanall", "muteall", "unmuteall", "unpinall"]
 

@@ -5,8 +5,8 @@ from pyrogram.enums import ChatType
 from pyrogram.errors import MessageDeleteForbidden, RPCError, FloodWait
 from pyrogram.types import Message
 
-from BANIYA_MUSIC_V3 import app
-from BANIYA_MUSIC_V3.utils.admin_filters import admin_filter
+from BANIYA_V3 import app
+from BANIYA_V3.utils.admin_filters import admin_filter
 
 
 def divide_chunks(l: list, n: int = 100):

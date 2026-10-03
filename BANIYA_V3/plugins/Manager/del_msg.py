@@ -12,11 +12,11 @@ from pyrogram.errors import (
 )
 from pyrogram.types import ChatAdministratorRights as _Priv
 
-from BANIYA_MUSIC_V3 import app
-from BANIYA_MUSIC_V3.logging import LOGGER as _LOGGER_FACTORY
-from BANIYA_MUSIC_V3.misc import SUDOERS
-from BANIYA_MUSIC_V3.utils.database import get_assistant
-from BANIYA_MUSIC_V3.utils.permissions import is_owner_or_sudoer, mention
+from BANIYA_V3 import app
+from BANIYA_V3.logging import LOGGER as _LOGGER_FACTORY
+from BANIYA_V3.misc import SUDOERS
+from BANIYA_V3.utils.database import get_assistant
+from BANIYA_V3.utils.permissions import is_owner_or_sudoer, mention
 
 log = _LOGGER_FACTORY(__name__)
 
