@@ -1,50 +1,82 @@
-﻿# Authored By Certified Coders © 2025
+# Authored By Certified Coders © 2025
 """
 -------------------------------------------------------------------------
-Mass/group administration commands with owner‑only confirmation:
+Mass/group administration commands with owner-only confirmation:
 
-• /kickall   – kick all non‑admin members  
-• /banall    – ban all non‑admin members  
-• /unbanall  – unban all previously banned members  
-• /muteall   – mute all non‑admin members  
-• /unmuteall – unmute all non‑admin members  
-• /unpinall  – unpin all messages  
+• /kickall   – kick all non-admin members
+• /banall    – ban all non-admin members
+• /unbanall  – unban all previously banned members
+• /muteall   – mute all non-admin members
+• /unmuteall – unmute all non-admin members
+• /unpinall  – unpin all messages
 
-Only the group owner or sudoers can run these.  
+Only the group owner or sudoers can run these.
 Each command asks for a Yes/No confirmation via inline buttons.
 -------------------------------------------------------------------------
 """
 
 import asyncio
 
-from pyrogram import filters, Client
-from pyrogram.types import (
-    InlineKeyboardButton, InlineKeyboardMarkup,
-    CallbackQuery, Message, ChatPermissions
-)
+from pyrogram import filters
+from pyrogram.types import (InlineKeyboardButton, InlineKeyboardMarkup,
+                            CallbackQuery, Message, ChatPermissions)
 from pyrogram.enums import ChatMemberStatus, ChatMembersFilter
 
-from BANIYA_V3 import app
-from BANIYA_V3.utils.permissions import is_owner_or_sudoer, mention
+from BANIYA_V3 import app, config
 
+
+# ────────────────────────────────────────────────────────────
+# Helpers (BANIYA_V3 ke hisaab se)
+# ────────────────────────────────────────────────────────────
+
+def mention(user_id: int, name: str) -> str:
+    return f"[{name}](tg://user?id={user_id})"
+
+
+async def is_owner_or_sudoer(client, chat_id: int, user_id: int):
+    """Check karta hai ki user owner ya sudoer hai ya nahi.
+    Returns: (bool, member_object_or_None)
+    """
+    # Sudo check
+    if user_id in config.OWNER_ID or user_id in app.sudoers:
+        try:
+            member = await client.get_chat_member(chat_id, user_id)
+            return True, member.user
+        except Exception:
+            return True, None
+
+    # Chat owner check
+    try:
+        member = await client.get_chat_member(chat_id, user_id)
+        if member.status == ChatMemberStatus.OWNER:
+            return True, member.user
+    except Exception:
+        pass
+
+    return False, None
+
+
+# ────────────────────────────────────────────────────────────
+# Command handler
+# ────────────────────────────────────────────────────────────
 MASS_CMDS = ["kickall", "banall", "unbanall", "muteall", "unmuteall", "unpinall"]
 
 
 def _confirmation_keyboard(cmd: str) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("Yes", callback_data=f"{cmd}_yes"),
-         InlineKeyboardButton("No",  callback_data=f"{cmd}_no")]
+         InlineKeyboardButton("No", callback_data=f"{cmd}_no")]
     ])
 
 
 @app.on_message(filters.command(MASS_CMDS) & filters.group)
-async def ask_mass_confirm(client: Client, message: Message):
+async def ask_mass_confirm(client, message: Message):
     cmd = message.command[0]
     ok, owner = await is_owner_or_sudoer(client, message.chat.id, message.from_user.id)
     if not ok:
         owner_m = mention(owner.id, owner.first_name) if owner else "the owner"
         return await message.reply_text(
-            f"❌ Only {owner_m} may run “{cmd}”."
+            f"❌ Only {owner_m} may run \"{cmd}\"."
         )
 
     await message.reply_text(
@@ -54,9 +86,9 @@ async def ask_mass_confirm(client: Client, message: Message):
 
 
 @app.on_callback_query(filters.regex(rf"^({'|'.join(MASS_CMDS)})_(yes|no)$"))
-async def handle_mass_confirm(client: Client, callback: CallbackQuery):
+async def handle_mass_confirm(client, callback: CallbackQuery):
     data = callback.data
-    cmd, answer = data.split("_")
+    cmd, answer = data.rsplit("_", 1)
     chat_id = callback.message.chat.id
     uid = callback.from_user.id
 
@@ -67,18 +99,22 @@ async def handle_mass_confirm(client: Client, callback: CallbackQuery):
     if answer == "no":
         return await callback.message.edit(f"❌ `{cmd}` canceled.")
 
-    bot_member = await client.get_chat_member(chat_id, client.me.id)
-    priv = bot_member.privileges
-    needed = {
-        "kickall":   priv.can_restrict_members,
-        "banall":    priv.can_restrict_members,
-        "unbanall":  priv.can_restrict_members,
-        "muteall":   priv.can_restrict_members,
-        "unmuteall": priv.can_restrict_members,
-        "unpinall":  priv.can_pin_messages,
-    }
-    if not needed.get(cmd, False):
-        return await callback.message.edit("❌ I lack necessary permissions.")
+    # Bot permissions check
+    try:
+        bot_member = await client.get_chat_member(chat_id, client.me.id)
+        priv = bot_member.privileges
+        needed = {
+            "kickall":   priv.can_restrict_members if priv else False,
+            "banall":    priv.can_restrict_members if priv else False,
+            "unbanall":  priv.can_restrict_members if priv else False,
+            "muteall":   priv.can_restrict_members if priv else False,
+            "unmuteall": priv.can_restrict_members if priv else False,
+            "unpinall":  priv.can_pin_messages if priv else False,
+        }
+        if not needed.get(cmd, False):
+            return await callback.message.edit("❌ I lack necessary permissions.")
+    except Exception:
+        pass
 
     await callback.message.edit(f"⏳ `{cmd}` in progress…")
 
@@ -101,20 +137,23 @@ async def handle_mass_confirm(client: Client, callback: CallbackQuery):
         await callback.message.edit(f"❌ Error during `{cmd}`:\n{e}")
 
 
-# ─────────────────────────────────────────────────────
+# ────────────────────────────────────────────────────────────
 # Implementations
-# ─────────────────────────────────────────────────────
+# ────────────────────────────────────────────────────────────
+
 async def _do_kickall(client, chat_id: int):
     kicked, errors = 0, 0
     async for m in client.get_chat_members(chat_id):
         if m.user.is_bot or m.status == ChatMemberStatus.OWNER:
+            continue
+        if m.status == ChatMemberStatus.ADMINISTRATOR:
             continue
         try:
             await client.ban_chat_member(chat_id, m.user.id)
             await asyncio.sleep(0.1)
             await client.unban_chat_member(chat_id, m.user.id)
             kicked += 1
-        except:
+        except Exception:
             errors += 1
         await asyncio.sleep(0.05)
     await client.send_message(chat_id, f"Kicked: {kicked}\nFailures: {errors}")
@@ -125,14 +164,15 @@ async def _do_banall(client, chat_id: int):
     async for m in client.get_chat_members(chat_id):
         if m.user.is_bot or m.status == ChatMemberStatus.OWNER:
             continue
+        if m.status == ChatMemberStatus.ADMINISTRATOR:
+            continue
         try:
             await client.ban_chat_member(chat_id, m.user.id)
             banned += 1
-        except:
+        except Exception:
             errors += 1
         await asyncio.sleep(0.05)
     await client.send_message(chat_id, f"Banned: {banned}\nFailures: {errors}")
-
 
 
 async def _do_unbanall(client, chat_id: int):
@@ -141,7 +181,7 @@ async def _do_unbanall(client, chat_id: int):
         try:
             await client.unban_chat_member(chat_id, m.user.id)
             unbanned += 1
-        except:
+        except Exception:
             errors += 1
         await asyncio.sleep(0.05)
     await client.send_message(chat_id, f"Unbanned: {unbanned}\nFailures: {errors}")
@@ -151,12 +191,13 @@ async def _do_muteall(client, chat_id: int):
     muted, errors = 0, 0
     perms = ChatPermissions()
     async for m in client.get_chat_members(chat_id):
-        if m.user.is_bot or m.status in (ChatMemberStatus.ADMINISTRATOR, ChatMemberStatus.OWNER):
+        if m.user.is_bot or m.status in (ChatMemberStatus.ADMINISTRATOR,
+                                          ChatMemberStatus.OWNER):
             continue
         try:
             await client.restrict_chat_member(chat_id, m.user.id, perms)
             muted += 1
-        except:
+        except Exception:
             errors += 1
         await asyncio.sleep(0.05)
     await client.send_message(chat_id, f"Muted: {muted}\nFailures: {errors}")
@@ -173,12 +214,13 @@ async def _do_unmuteall(client, chat_id: int):
         can_invite_users=True,
     )
     async for m in client.get_chat_members(chat_id):
-        if m.user.is_bot or m.status in (ChatMemberStatus.ADMINISTRATOR, ChatMemberStatus.OWNER):
+        if m.user.is_bot or m.status in (ChatMemberStatus.ADMINISTRATOR,
+                                          ChatMemberStatus.OWNER):
             continue
         try:
             await client.restrict_chat_member(chat_id, m.user.id, perms)
             unmuted += 1
-        except:
+        except Exception:
             errors += 1
         await asyncio.sleep(0.05)
     await client.send_message(chat_id, f"Unmuted: {unmuted}\nFailures: {errors}")
