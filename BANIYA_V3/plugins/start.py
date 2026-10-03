@@ -3,38 +3,11 @@
 # This file is part of AnonXMusic
 
 import asyncio
-import logging
-
-import requests
+import os
 from pyrogram import enums, filters, types
 
 from BANIYA_V3 import app, config, db, lang
 from BANIYA_V3.helpers import buttons, utils
-
-logger = logging.getLogger(__name__)
-
-
-def _debug_url(url: str):
-    """Check if a URL is reachable and return useful info for debugging."""
-    info = {
-        "url": url,
-        "status_code": None,
-        "content_type": None,
-        "content_length": None,
-        "final_url": None,
-        "error": None,
-    }
-    try:
-        resp = requests.head(url, timeout=10, allow_redirects=True)
-        info["status_code"] = resp.status_code
-        info["content_type"] = resp.headers.get("Content-Type")
-        info["content_length"] = resp.headers.get("Content-Length")
-        info["final_url"] = resp.url
-        if resp.status_code != 200:
-            info["error"] = f"Non-200 status: {resp.status_code}"
-    except Exception as e:
-        info["error"] = f"{type(e).__name__}: {e}"
-    return info
 
 
 @app.on_message(filters.command(["help"]) & filters.private & ~app.bl_users)
@@ -64,52 +37,28 @@ async def start(_, message: types.Message):
 
     key = buttons.start_key(message.lang, private)
 
-    # DEBUG: log the image URL before sending
-    logger.info("[START] chat_id=%s private=%s", message.chat.id, private)
-    logger.info("[START] START_IMG value = %r", config.START_IMG)
-    logger.info("[START] START_IMG type  = %s", type(config.START_IMG).__name__)
-
-    # If it's an HTTP URL, check reachability and log details
-    if isinstance(config.START_IMG, str) and config.START_IMG.startswith(("http://", "https://")):
-        debug_info = _debug_url(config.START_IMG)
-        logger.info(
-            "[START] URL debug | status=%s | type=%s | length=%s | final=%s | error=%s",
-            debug_info["status_code"],
-            debug_info["content_type"],
-            debug_info["content_length"],
-            debug_info["final_url"],
-            debug_info["error"],
-        )
-
-        # Warn if content-type isn't an image
-        ct = debug_info["content_type"] or ""
-        if not ct.startswith("image/"):
-            logger.warning(
-                "[START] URL does not return an image. Content-Type=%r. "
-                "Telegram will likely reject this with WEBPAGE_CURL_FAILED.",
-                ct,
-            )
-    else:
-        logger.info("[START] START_IMG is not an HTTP URL, skipping reachability check.")
+    # start.jpg ka path (project root me hona chahiye)
+    photo_path = os.path.join(os.getcwd(), "start.jpg")
 
     try:
-        await message.reply_photo(
-            photo=config.START_IMG,
-            caption=_text,
-            reply_markup=key,
-        )
-        logger.info("[START] Photo sent successfully.")
-    except Exception as e:
-        logger.exception("[START] reply_photo failed: %s", e)
-        # Fallback: send text without the photo so the user still gets a reply
-        try:
+        if os.path.exists(photo_path):
+            await message.reply_photo(
+                photo=photo_path,
+                caption=_text,
+                reply_markup=key,
+            )
+        else:
+            print(f"[START] start.jpg not found at: {photo_path}")
             await message.reply_text(
                 text=_text,
                 reply_markup=key,
             )
-            logger.info("[START] Fallback text message sent (photo failed).")
-        except Exception as e2:
-            logger.exception("[START] Fallback text also failed: %s", e2)
+    except Exception as e:
+        print(f"[START] reply_photo failed: {e}")
+        await message.reply_text(
+            text=_text,
+            reply_markup=key,
+        )
 
     if private:
         if await db.is_user(message.from_user.id):
