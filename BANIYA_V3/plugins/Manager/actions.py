@@ -1,21 +1,7 @@
-﻿# Authored By Certified Coders © 2025
+# Authored By Certified Coders © 2025
 """
 -------------------------------------------------------------------------
 Single-user moderation commands with complete edge-case handling.
-
-• /ban     – ban a user
-• /unban   – unban a user
-• /mute    – mute a user
-• /unmute  – unmute a user
-• /tmute   – temporary mute (e.g., /tmute @user 1h)
-• /kick    – kick a user (auto-unban after 2s)
-• /dban    – delete message & ban (reply only)
-• /sban    – silent ban (no notification)
-• /kickme  – user self-kick (auto-unban after 3s)
-• /tban    – temporary ban (e.g., /tban @user 1d)
-
-All commands accept reply, @username, or user-ID.
-Usage hints, duplicate-state checks, and safe RPC handling throughout.
 -------------------------------------------------------------------------
 """
 
@@ -24,15 +10,109 @@ import datetime as dt
 from typing import Optional
 
 from pyrogram import filters, enums
-from pyrogram.errors import ChatAdminRequired, UserAdminInvalid, UserNotParticipant, RPCError
+from pyrogram.errors import (ChatAdminRequired, UserAdminInvalid,
+                             UserNotParticipant, RPCError)
 from pyrogram.types import Message, ChatPermissions
 
-from BANIYA_V3 import app
-from BANIYA_V3.utils.decorator import admin_required
-from BANIYA_V3.utils.permissions import extract_user_and_reason, mention, parse_time
+from BANIYA_V3 import app, config
+
 
 # ────────────────────────────────────────────────────────────
-# Constants & Helpers
+# admin_check decorator (agar aapke helpers me nahi hai toh ye use karein)
+# ────────────────────────────────────────────────────────────
+from functools import wraps
+
+
+def admin_check(func):
+    @wraps(func)
+    async def wrapper(client, message: Message, *args, **kwargs):
+        if message.chat.type == enums.ChatType.PRIVATE:
+            return
+        # Owner bypass
+        if message.from_user.id in config.OWNER_ID:
+            return await func(client, message, *args, **kwargs)
+        # Sudo bypass
+        if message.from_user.id in app.sudoers:
+            return await func(client, message, *args, **kwargs)
+        # Admin check
+        try:
+            member = await client.get_chat_member(message.chat.id, message.from_user.id)
+            if member.status in (enums.ChatMemberStatus.ADMINISTRATOR,
+                                 enums.ChatMemberStatus.OWNER):
+                return await func(client, message, *args, **kwargs)
+        except Exception:
+            pass
+        await message.reply_text("You need to be an admin to use this command.")
+    return wrapper
+
+
+# ────────────────────────────────────────────────────────────
+# Helpers
+# ────────────────────────────────────────────────────────────
+
+def mention(user_id: int, name: str) -> str:
+    return f"[{name}](tg://user?id={user_id})"
+
+
+def parse_time(time_arg: str) -> Optional[dt.timedelta]:
+    """1s, 5m, 2h, 3d → timedelta"""
+    if not time_arg:
+        return None
+    unit = time_arg[-1].lower()
+    try:
+        num = int(time_arg[:-1])
+    except ValueError:
+        return None
+    if unit == "s":
+        return dt.timedelta(seconds=num)
+    elif unit == "m":
+        return dt.timedelta(minutes=num)
+    elif unit == "h":
+        return dt.timedelta(hours=num)
+    elif unit == "d":
+        return dt.timedelta(days=num)
+    return None
+
+
+async def extract_user_and_reason(message: Message, client):
+    user_id = None
+    name = None
+    reason = None
+
+    if message.reply_to_message and message.reply_to_message.from_user:
+        user_id = message.reply_to_message.from_user.id
+        name = message.reply_to_message.from_user.first_name
+        if len(message.command) > 1:
+            reason = message.text.split(None, 1)[1]
+    elif len(message.command) >= 2:
+        arg = message.command[1]
+        if arg.startswith("@"):
+            try:
+                user = await client.get_users(arg)
+                user_id = user.id
+                name = user.first_name
+            except Exception:
+                await message.reply_text("User not found.")
+                return None, None, None
+        else:
+            try:
+                user_id = int(arg)
+                user = await client.get_users(user_id)
+                name = user.first_name
+            except Exception:
+                await message.reply_text("Invalid user ID.")
+                return None, None, None
+        if len(message.command) > 2:
+            reason = message.text.split(None, 2)[2]
+    else:
+        await message.reply_text("Please reply to a user or provide a username/ID.")
+        return None, None, None
+
+    return user_id, name, reason
+
+
+# ────────────────────────────────────────────────────────────
+# Constants
 # ────────────────────────────────────────────────────────────
 _DEF_MUTE_PERMS = ChatPermissions()
 
@@ -49,8 +129,10 @@ _USAGES = {
     "kickme": "/kickme — kick yourself from the group",
 }
 
+
 def _usage(cmd: str) -> str:
     return _USAGES.get(cmd, "Invalid usage.")
+
 
 def _format_success(action: str, msg: Message, uid: int, name: str, reason: Optional[str]) -> str:
     chat = msg.chat.title
@@ -65,24 +147,29 @@ def _format_success(action: str, msg: Message, uid: int, name: str, reason: Opti
         text += f"\nReason: {reason}"
     return text
 
+
 async def _get_member_safe(client, chat_id: int, user_id: int):
     try:
         return await client.get_chat_member(chat_id, user_id)
     except (UserNotParticipant, RPCError):
         return None
 
+
 async def _get_bot_member(client, chat_id: int):
     me = await client.get_me()
     return await _get_member_safe(client, chat_id, me.id)
 
+
 def _is_admin_status(status: enums.ChatMemberStatus) -> bool:
-    return status in (enums.ChatMemberStatus.ADMINISTRATOR, enums.ChatMemberStatus.OWNER)
+    return status in (enums.ChatMemberStatus.ADMINISTRATOR,
+                      enums.ChatMemberStatus.OWNER)
+
 
 # ────────────────────────────────────────────────────────────
 # /ban
 # ────────────────────────────────────────────────────────────
-@app.on_message(filters.command("ban"))
-@admin_required("can_restrict_members")
+@app.on_message(filters.command("ban") & filters.group)
+@admin_check
 async def ban_cmd(client, message: Message):
     if len(message.command) == 1 and not message.reply_to_message:
         return await message.reply_text(_usage("ban"))
@@ -106,11 +193,12 @@ async def ban_cmd(client, message: Message):
     except UserAdminInvalid:
         await message.reply_text("I cannot ban an admin.")
 
+
 # ────────────────────────────────────────────────────────────
 # /unban
 # ────────────────────────────────────────────────────────────
-@app.on_message(filters.command("unban"))
-@admin_required("can_restrict_members")
+@app.on_message(filters.command("unban") & filters.group)
+@admin_check
 async def unban_cmd(client, message: Message):
     if len(message.command) == 1 and not message.reply_to_message:
         return await message.reply_text(_usage("unban"))
@@ -128,11 +216,12 @@ async def unban_cmd(client, message: Message):
     except ChatAdminRequired:
         await message.reply_text("I need unban permissions.")
 
+
 # ────────────────────────────────────────────────────────────
 # /mute
 # ────────────────────────────────────────────────────────────
-@app.on_message(filters.command("mute"))
-@admin_required("can_restrict_members")
+@app.on_message(filters.command("mute") & filters.group)
+@admin_check
 async def mute_cmd(client, message: Message):
     if len(message.command) == 1 and not message.reply_to_message:
         return await message.reply_text(_usage("mute"))
@@ -156,11 +245,12 @@ async def mute_cmd(client, message: Message):
     except UserAdminInvalid:
         await message.reply_text("I cannot mute an admin.")
 
+
 # ────────────────────────────────────────────────────────────
 # /unmute
 # ────────────────────────────────────────────────────────────
-@app.on_message(filters.command("unmute"))
-@admin_required("can_restrict_members")
+@app.on_message(filters.command("unmute") & filters.group)
+@admin_check
 async def unmute_cmd(client, message: Message):
     if len(message.command) == 1 and not message.reply_to_message:
         return await message.reply_text(_usage("unmute"))
@@ -186,11 +276,12 @@ async def unmute_cmd(client, message: Message):
     except ChatAdminRequired:
         await message.reply_text("I need unmute permissions.")
 
+
 # ────────────────────────────────────────────────────────────
 # /tmute
 # ────────────────────────────────────────────────────────────
-@app.on_message(filters.command("tmute"))
-@admin_required("can_restrict_members")
+@app.on_message(filters.command("tmute") & filters.group)
+@admin_check
 async def tmute_cmd(client, message: Message):
     if ((not message.reply_to_message and len(message.command) < 3) or
         (message.reply_to_message and len(message.command) < 2)):
@@ -203,7 +294,7 @@ async def tmute_cmd(client, message: Message):
     else:
         user = await client.get_users(message.command[1])
         if not user:
-            return await message.reply_text("I can’t find that user.")
+            return await message.reply_text("I can't find that user.")
         time_arg= message.command[2]
         reason  = message.text.partition(time_arg)[2].strip()
 
@@ -224,11 +315,12 @@ async def tmute_cmd(client, message: Message):
     except UserAdminInvalid:
         await message.reply_text("I cannot mute an admin.")
 
+
 # ────────────────────────────────────────────────────────────
 # /kick
 # ────────────────────────────────────────────────────────────
-@app.on_message(filters.command("kick"))
-@admin_required("can_restrict_members")
+@app.on_message(filters.command("kick") & filters.group)
+@admin_check
 async def kick_cmd(client, message: Message):
     if len(message.command) == 1 and not message.reply_to_message:
         return await message.reply_text(_usage("kick"))
@@ -251,11 +343,12 @@ async def kick_cmd(client, message: Message):
     except UserAdminInvalid:
         await message.reply_text("I cannot kick an admin.")
 
+
 # ────────────────────────────────────────────────────────────
 # /dban
 # ────────────────────────────────────────────────────────────
-@app.on_message(filters.command("dban"))
-@admin_required("can_restrict_members", "can_delete_messages")
+@app.on_message(filters.command("dban") & filters.group)
+@admin_check
 async def dban_cmd(client, message: Message):
     if not message.reply_to_message:
         return await message.reply_text(_usage("dban"))
@@ -276,11 +369,12 @@ async def dban_cmd(client, message: Message):
     except UserAdminInvalid:
         await message.reply_text("I cannot ban an admin.")
 
+
 # ────────────────────────────────────────────────────────────
 # /sban
 # ────────────────────────────────────────────────────────────
-@app.on_message(filters.command("sban"))
-@admin_required("can_restrict_members")
+@app.on_message(filters.command("sban") & filters.group)
+@admin_check
 async def sban_cmd(client, message: Message):
     if len(message.command) == 1 and not message.reply_to_message:
         return await message.reply_text(_usage("sban"))
@@ -295,23 +389,24 @@ async def sban_cmd(client, message: Message):
 
     try:
         await client.ban_chat_member(message.chat.id, uid)
-        await message.delete()  # silent
+        await message.delete()
     except ChatAdminRequired:
         await message.reply_text("I need ban permissions.")
     except UserAdminInvalid:
         await message.reply_text("I cannot ban an admin.")
 
+
 # ────────────────────────────────────────────────────────────
 # /kickme
 # ────────────────────────────────────────────────────────────
-@app.on_message(filters.command("kickme"))
+@app.on_message(filters.command("kickme") & filters.group)
 async def kickme_cmd(client, message: Message):
     if message.chat.type == enums.ChatType.PRIVATE:
         return
 
     target = await _get_member_safe(client, message.chat.id, message.from_user.id)
     if target and _is_admin_status(target.status):
-        return await message.reply_text("Nice try, boss 😅 I can’t kick admins or the owner.")
+        return await message.reply_text("Nice try, boss 😅 I can't kick admins or the owner.")
 
     bot_mem = await _get_bot_member(client, message.chat.id)
     if not bot_mem or not getattr(bot_mem, "can_restrict_members", False):
@@ -325,13 +420,14 @@ async def kickme_cmd(client, message: Message):
     except ChatAdminRequired:
         await message.reply_text("I need ban permissions.")
     except UserAdminInvalid:
-        await message.reply_text("I can’t kick admins or the owner.")
+        await message.reply_text("I can't kick admins or the owner.")
+
 
 # ────────────────────────────────────────────────────────────
 # /tban
 # ────────────────────────────────────────────────────────────
-@app.on_message(filters.command("tban"))
-@admin_required("can_restrict_members")
+@app.on_message(filters.command("tban") & filters.group)
+@admin_check
 async def tban_cmd(client, message: Message):
     if ((not message.reply_to_message and len(message.command) < 3) or
         (message.reply_to_message and len(message.command) < 2)):
@@ -344,7 +440,7 @@ async def tban_cmd(client, message: Message):
     else:
         user = await client.get_users(message.command[1])
         if not user:
-            return await message.reply_text("I can’t find that user.")
+            return await message.reply_text("I can't find that user.")
         time_arg= message.command[2]
         reason  = message.text.partition(time_arg)[2].strip()
 
