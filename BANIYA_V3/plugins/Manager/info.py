@@ -18,13 +18,13 @@ def get_last_seen(status):
         status = status.name.lower()
 
     return {
-        "online": "🟢 Online",
-        "offline": "🔴 Offline",
-        "recently": "⏱️ Recently",
-        "last_week": "📅 Last week",
-        "last_month": "📆 Last month",
-        "long_ago": "😴 Long ago"
-    }.get(status, "❓ Unknown")
+        "online": "<emoji id='6127296324107769784'>✅</emoji> Online",
+        "offline": "<emoji id='6032606743500951856'>❌</emoji> Offline",
+        "recently": "<emoji id='5426856766665154421'>🚬</emoji> Recently",
+        "last_week": "<emoji id='5769547529993588669'>👑</emoji> Last week",
+        "last_month": "<emoji id='6127296324107769784'>✅</emoji> Last month",
+        "long_ago": "<emoji id='6127296324107769784'>✅</emoji> Long ago"
+    }.get(status, "<emoji id='6127296324107769784'>✅</emoji> Unknown")
 
 
 @app.on_message(filters.command(["info", "userinfo", "whois"]))
@@ -37,7 +37,9 @@ async def whois_handler(_, message: Message):
         else:
             user = message.from_user
 
-        loading = await message.reply("🔍 <b>Fetching user info...</b>")
+        loading = await message.reply(
+            "<emoji id='5258274739041883702'>🔍</emoji> <b>Fetching user info...</b>"
+        )
         await asyncio.sleep(0.5)
 
         chat_user = await app.get_chat(user.id)
@@ -50,23 +52,23 @@ async def whois_handler(_, message: Message):
         lang = getattr(user, "language_code", "N/A")
 
         text = (
-            f"👤 <b>User Info</b>\n"
+            f"<emoji id='5258011929993026890'>👤</emoji> <b>User Info</b>\n"
             f"────────────────\n"
-            f"➣ <b>User ID:</b> <code>{user.id}</code>\n"
-            f"➣ <b>Name:</b> {name}\n"
-            f"➣ <b>Username:</b> {username}\n"
-            f"➣ <b>Last seen:</b> {last_seen}\n"
-            f"➣ <b>DataCenter ID:</b> {dc_id}\n"
-            f"➣ <b>Language:</b> {lang}\n"
+            f"<emoji id='6127296324107769784'>✅</emoji> <b>User ID:</b> <code>{user.id}</code>\n"
+            f"<emoji id='6127296324107769784'>✅</emoji> <b>Name:</b> {name}\n"
+            f"<emoji id='6127296324107769784'>✅</emoji> <b>Username:</b> {username}\n"
+            f"<emoji id='6127296324107769784'>✅</emoji> <b>Last seen:</b> {last_seen}\n"
+            f"<emoji id='6127296324107769784'>✅</emoji> <b>DataCenter ID:</b> {dc_id}\n"
+            f"<emoji id='6127296324107769784'>✅</emoji> <b>Language:</b> {lang}\n"
             f"────────────────\n"
-            f"➣ <b>Verified:</b> {'Yes ✅' if user.is_verified else 'No ❌'}\n"
-            f"➣ <b>Premium:</b> {'Yes 💎' if user.is_premium else 'No ❌'}\n"
-            f"➣ <b>Bot:</b> {'Yes 🤖' if user.is_bot else 'No 👤'}\n"
-            f"➣ <b>Scam:</b> {'Yes ⚠️' if getattr(user, 'is_scam', False) else 'No ✅'}\n"
-            f"➣ <b>Fake:</b> {'Yes 🎭' if getattr(user, 'is_fake', False) else 'No ✅'}\n"
-            f"➣ <b>Profile Photo:</b> {'Yes 🌸' if user.photo else 'No ❌'}\n"
+            f"<emoji id='6127296324107769784'>✅</emoji> <b>Verified:</b> {'Yes ✅' if user.is_verified else 'No ❌'}\n"
+            f"<emoji id='6127296324107769784'>✅</emoji> <b>Premium:</b> {'Yes 💎' if user.is_premium else 'No ❌'}\n"
+            f"<emoji id='6127296324107769784'>✅</emoji> <b>Bot:</b> {'Yes 🤖' if user.is_bot else 'No 👤'}\n"
+            f"<emoji id='6127296324107769784'>✅</emoji> <b>Scam:</b> {'Yes ⚠️' if getattr(user, 'is_scam', False) else 'No ✅'}\n"
+            f"<emoji id='6127296324107769784'>✅</emoji> <b>Fake:</b> {'Yes 🎭' if getattr(user, 'is_fake', False) else 'No ✅'}\n"
+            f"<emoji id='6127296324107769784'>✅</emoji> <b>Profile Photo:</b> {'Yes 🌸' if user.photo else 'No ❌'}\n"
             f"────────────────\n"
-            f"➣ <b>Bio:</b> <code>{bio}</code>"
+            f"<emoji id='6127296324107769784'>✅</emoji> <b>Bio:</b> <code>{bio}</code>"
         )
 
         profile_url = (
@@ -75,8 +77,14 @@ async def whois_handler(_, message: Message):
             else f"tg://user?id={user.id}"
         )
         buttons = InlineKeyboardMarkup([[
-            InlineKeyboardButton("👤 View Profile", url=profile_url),
-            InlineKeyboardButton("📞 Share", url="tg://settings")
+            InlineKeyboardButton(
+                "👤 View Profile",
+                url=profile_url,
+            ),
+            InlineKeyboardButton(
+                "📞 Share",
+                url="tg://settings",
+            )
         ]])
 
         await app.edit_message_text(
