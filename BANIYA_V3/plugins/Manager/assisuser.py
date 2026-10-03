@@ -29,14 +29,29 @@ async def _admin_filter_func(_, __, message):
 
 async def _sudo_filter_func(_, __, message):
     try:
-        return message.from_user.id in config.OWNER_ID or message.from_user.id in app.sudoers
+        owner = config.OWNER_ID
+        if isinstance(owner, int):
+            owner_ids = {owner}
+        else:
+            owner_ids = set(owner)
+
+        if message.from_user.id in owner_ids:
+            return True
+        if message.from_user.id in app.sudoers:
+            return True
     except Exception:
-        return False
+        pass
+    return False
 
 
 async def _dev_filter_func(_, __, message):
     try:
-        return message.from_user.id in config.OWNER_ID
+        owner = config.OWNER_ID
+        if isinstance(owner, int):
+            owner_ids = {owner}
+        else:
+            owner_ids = set(owner)
+        return message.from_user.id in owner_ids
     except Exception:
         return False
 
@@ -47,14 +62,16 @@ dev_filter = filters.create(_dev_filter_func)
 
 
 # ────────────────────────────────────────────────────────────
-# Assistant helper
+# Assistant helper (PyTgCalls ka mtproto handle karta hai)
 # ────────────────────────────────────────────────────────────
 async def get_assistant(chat_id: int):
-    """Aapke project ke db se assistant nikaalta hai.
-    Fallback: userbot.clients[0]
-    """
+    """Assistant client nikaalo (Pyrogram Client, not PyTgCalls)"""
     try:
-        return await db.get_assistant(chat_id)
+        client = await db.get_assistant(chat_id)
+        # Agar PyTgCalls mila toh uska mtproto (Pyrogram Client) use karo
+        if hasattr(client, "mtproto"):
+            return client.mtproto
+        return client
     except AttributeError:
         from BANIYA_V3 import userbot
         for client in userbot.clients:
@@ -82,12 +99,14 @@ async def _is_participant(client, chat_id: int, user_id: int) -> bool:
 
 async def join_userbot(app, chat_id: int, chat_username: str = None) -> str:
     userbot = await get_assistant(chat_id)
+    userbot_id = userbot.me.id
+
     try:
-        member = await app.get_chat_member(chat_id, userbot.id)
+        member = await app.get_chat_member(chat_id, userbot_id)
         if member.status == ChatMemberStatus.BANNED:
             try:
-                await app.unban_chat_member(chat_id, userbot.id)
-                member = await app.get_chat_member(chat_id, userbot.id)
+                await app.unban_chat_member(chat_id, userbot_id)
+                member = await app.get_chat_member(chat_id, userbot_id)
             except ChatAdminRequired:
                 return "**❌ I need unban permission to add the assistant.**"
         if member.status in ACTIVE_STATUSES:
@@ -129,18 +148,21 @@ async def approve_join_request(client, chat_join_request: ChatJoinRequest):
         userbot = await get_assistant(chat_join_request.chat.id)
     except Exception:
         return
-    if chat_join_request.from_user.id != userbot.id:
+
+    userbot_id = userbot.me.id
+
+    if chat_join_request.from_user.id != userbot_id:
         return
 
     chat_id = chat_join_request.chat.id
     try:
-        if await _is_participant(client, chat_id, userbot.id):
+        if await _is_participant(client, chat_id, userbot_id):
             return
 
         max_retries = 3
         for attempt in range(max_retries):
             try:
-                await client.approve_chat_join_request(chat_id, userbot.id)
+                await client.approve_chat_join_request(chat_id, userbot_id)
                 break
             except UserAlreadyParticipant:
                 return
@@ -207,8 +229,10 @@ async def leave_one(app, message):
     chat_id = message.chat.id
     try:
         userbot = await get_assistant(chat_id)
+        userbot_id = userbot.me.id
+
         try:
-            member = await userbot.get_chat_member(chat_id, userbot.id)
+            member = await userbot.get_chat_member(chat_id, userbot_id)
             if member.status not in ACTIVE_STATUSES:
                 await message.reply("**🤖 Assistant is not currently in this chat.**")
                 return
