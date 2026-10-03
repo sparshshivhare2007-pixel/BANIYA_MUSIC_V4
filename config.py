@@ -17,7 +17,7 @@ class Config:
 
         # 👑 Owner & Logs
         self.LOGGER_ID = int(getenv("LOGGER_ID", 0))
-        self.OWNER_ID = int(getenv("OWNER_ID", 0))
+        self.OWNER_ID = [int(getenv("OWNER_ID", 0))]
 
         # 🎵 Limits
         self.DURATION_LIMIT = int(getenv("DURATION_LIMIT", 60)) * 1200
