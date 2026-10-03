@@ -1,31 +1,56 @@
-﻿# Authored By Certified Coders © 2025
+# Authored By Certified Coders © 2025
 import asyncio
+import logging
 
 from pyrogram import filters, enums
-from pyrogram.types import (
-    InlineKeyboardMarkup, InlineKeyboardButton,
-    CallbackQuery, Message, ChatInviteLink
-)
-from pyrogram.errors import (
-    UserNotParticipant, ChatAdminRequired, FloodWait,
-    PeerIdInvalid, ChannelPrivate, MessageNotModified, MessageIdInvalid
-)
+from pyrogram.types import (InlineKeyboardMarkup, InlineKeyboardButton,
+                            CallbackQuery, Message, ChatInviteLink)
+from pyrogram.errors import (UserNotParticipant, ChatAdminRequired, FloodWait,
+                             PeerIdInvalid, ChannelPrivate, MessageNotModified,
+                             MessageIdInvalid)
 from pyrogram.types import ChatAdministratorRights as _Priv
 
-from BANIYA_V3 import app
-from BANIYA_V3.logging import LOGGER as _LOGGER_FACTORY
-from BANIYA_V3.misc import SUDOERS
-from BANIYA_V3.utils.database import get_assistant
-from BANIYA_V3.utils.permissions import is_owner_or_sudoer, mention
+from BANIYA_V3 import app, db, config
 
-log = _LOGGER_FACTORY(__name__)
+log = logging.getLogger(__name__)
 
 
+# ────────────────────────────────────────────────────────────
+# Helpers (khud define)
+# ────────────────────────────────────────────────────────────
+def mention(user_id: int, name: str) -> str:
+    return f"[{name}](tg://user?id={user_id})"
 
 
+async def is_owner_or_sudoer(client, chat_id: int, user_id: int):
+    """(bool, owner_user_or_None) return karta hai"""
+    # Sudo check
+    if user_id in config.OWNER_ID or user_id in app.sudoers:
+        try:
+            member = await client.get_chat_member(chat_id, user_id)
+            return True, member.user
+        except Exception:
+            return True, None
+
+    # Chat owner check
+    try:
+        member = await client.get_chat_member(chat_id, user_id)
+        if member.status == enums.ChatMemberStatus.OWNER:
+            return True, member.user
+    except Exception:
+        pass
+
+    return False, None
+
+
+# ────────────────────────────────────────────────────────────
+# UI helpers
+# ────────────────────────────────────────────────────────────
 def _confirm_kb(cmd: str) -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup([[InlineKeyboardButton("Yes", callback_data=f"{cmd}_yes"),
-                                  InlineKeyboardButton("No", callback_data=f"{cmd}_no")]])
+    return InlineKeyboardMarkup([[
+        InlineKeyboardButton("Yes", callback_data=f"{cmd}_yes"),
+        InlineKeyboardButton("No", callback_data=f"{cmd}_no")
+    ]])
 
 
 async def _safe_edit(cb: CallbackQuery, text: str):
@@ -49,6 +74,23 @@ async def _safe_edit(cb: CallbackQuery, text: str):
 def _has(bot_member, *flags) -> bool:
     priv = getattr(bot_member, "privileges", None) or getattr(bot_member, "permissions", None)
     return all(bool(getattr(priv, f, False)) for f in flags)
+
+
+# ────────────────────────────────────────────────────────────
+# Assistant helpers
+# ────────────────────────────────────────────────────────────
+async def _get_assistant(chat_id: int):
+    """BANIYA_V3 ke db se assistant nikaalta hai.
+    Aapke db me get_assistant() method hona chahiye.
+    """
+    try:
+        return await db.get_assistant(chat_id)
+    except AttributeError:
+        # Fallback: agar db me method nahi hai toh userbot ka pehla client use karo
+        from BANIYA_V3 import userbot
+        for client in userbot.clients:
+            return client
+        raise RuntimeError("No assistant client available.")
 
 
 async def _ensure_assistant_present_and_admin(bot_client, assistant, chat_id) -> int:
@@ -139,19 +181,28 @@ async def _fallback_batch_delete(assistant, chat_id, skip_ids=set(), concurrency
     return count
 
 
+# ────────────────────────────────────────────────────────────
+# /deleteall
+# ────────────────────────────────────────────────────────────
 @app.on_message(filters.command("deleteall") & filters.group)
 async def deleteall_command(client, message: Message):
     ok, owner = await is_owner_or_sudoer(client, message.chat.id, message.from_user.id)
     if not ok:
         owner_mention = mention(owner.id, owner.first_name) if owner else "the owner"
-        return await message.reply_text(f"Sorry {message.from_user.mention}, only {owner_mention} can use /deleteall.")
+        return await message.reply_text(
+            f"Sorry {message.from_user.mention}, only {owner_mention} can use /deleteall."
+        )
 
     bot_member = await client.get_chat_member(message.chat.id, client.me.id)
     if not _has(bot_member, "can_delete_messages", "can_invite_users", "can_promote_members"):
-        return await message.reply_text("I need to be admin with delete_messages, invite_users & promote_members.")
+        return await message.reply_text(
+            "I need to be admin with delete_messages, invite_users & promote_members."
+        )
 
-    await message.reply(f"{message.from_user.mention}, confirm delete all messages?",
-                        reply_markup=_confirm_kb("deleteall"))
+    await message.reply(
+        f"{message.from_user.mention}, confirm delete all messages?",
+        reply_markup=_confirm_kb("deleteall")
+    )
 
 
 @app.on_callback_query(filters.regex(r"^deleteall_(yes|no)$"))
@@ -170,7 +221,11 @@ async def deleteall_callback(client, callback: CallbackQuery):
 
     await _safe_edit(callback, "⏳ Deleting all messages...")
 
-    assistant = await get_assistant(chat_id)
+    try:
+        assistant = await _get_assistant(chat_id)
+    except Exception as e:
+        return await _safe_edit(callback, f"❌ No assistant available: {e}")
+
     ass_id = await _ensure_assistant_present_and_admin(client, assistant, chat_id)
 
     try:
@@ -178,12 +233,17 @@ async def deleteall_callback(client, callback: CallbackQuery):
         if fast_ok:
             await _safe_edit(callback, "✅ Cleared full chat history for everyone.")
         else:
-            await _safe_edit(callback, "⚠️ Fast clear not permitted by Telegram. Falling back to high‑speed batch deletion…")
+            await _safe_edit(
+                callback,
+                "⚠️ Fast clear not permitted by Telegram. Falling back to batch deletion…"
+            )
             skip = {callback.message.id}
-            deleted = await _fallback_batch_delete(assistant, chat_id, skip_ids=skip, concurrency=3, batch_size=100)
+            deleted = await _fallback_batch_delete(
+                assistant, chat_id, skip_ids=skip, concurrency=3, batch_size=100
+            )
             await _safe_edit(callback, f"✅ Deleted approximately {deleted} messages.")
     except ChatAdminRequired:
-        await _safe_edit(callback, "❌ Assistant lacks delete rights. Make me able to promote admins.")
+        await _safe_edit(callback, "❌ Assistant lacks delete rights.")
     except Exception as e:
         log.error("Delete-all fatal error: %s", e)
         await _safe_edit(callback, f"❌ Failed: {e}")
