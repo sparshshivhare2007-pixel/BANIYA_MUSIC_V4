@@ -12,9 +12,9 @@ from pyrogram.errors import (
     PeerIdInvalid,
     ChatWriteForbidden,
 )
-from AnnieXMedia import app
-from AnnieXMedia.utils.admin_filters import dev_filter, admin_filter, sudo_filter
-from AnnieXMedia.utils.database import get_assistant
+from BANIYA_MUSIC_V3 import app
+from BANIYA_MUSIC_V3.utils.admin_filters import dev_filter, admin_filter, sudo_filter
+from BANIYA_MUSIC_V3.utils.database import get_assistant
 
 ACTIVE_STATUSES = {
     ChatMemberStatus.OWNER,

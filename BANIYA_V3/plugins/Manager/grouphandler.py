@@ -2,8 +2,8 @@
 from pyrogram import filters
 from pyrogram.enums import ChatType
 from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
-from AnnieXMedia import app
-from AnnieXMedia.utils.admin_filters import admin_filter
+from BANIYA_MUSIC_V3 import app
+from BANIYA_MUSIC_V3.utils.admin_filters import admin_filter
 
 # ------------------- Utility Functions ------------------- #
 

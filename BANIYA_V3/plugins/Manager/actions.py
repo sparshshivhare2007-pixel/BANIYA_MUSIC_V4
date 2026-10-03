@@ -27,9 +27,9 @@ from pyrogram import filters, enums
 from pyrogram.errors import ChatAdminRequired, UserAdminInvalid, UserNotParticipant, RPCError
 from pyrogram.types import Message, ChatPermissions
 
-from AnnieXMedia import app
-from AnnieXMedia.utils.decorator import admin_required
-from AnnieXMedia.utils.permissions import extract_user_and_reason, mention, parse_time
+from BANIYA_MUSIC_V3 import app
+from BANIYA_MUSIC_V3.utils.decorator import admin_required
+from BANIYA_MUSIC_V3.utils.permissions import extract_user_and_reason, mention, parse_time
 
 # ────────────────────────────────────────────────────────────
 # Constants & Helpers

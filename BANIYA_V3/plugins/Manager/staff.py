@@ -7,7 +7,7 @@ from pyrogram.enums import ChatMemberStatus, ChatType
 from pyrogram.errors import ChannelInvalid, ChatAdminRequired, FloodWait
 from pyrogram.types import Message
 
-from AnnieXMedia import app
+from BANIYA_MUSIC_V3 import app
 
 
 def _in_group(msg: Message) -> bool:

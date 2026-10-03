@@ -4,7 +4,7 @@ from pyrogram import filters, enums, types
 from pyrogram.errors import PeerIdInvalid, RPCError, FloodWait
 from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
 
-from AnnieXMedia import app
+from BANIYA_MUSIC_V3 import app
 
 
 def get_full_name(user):

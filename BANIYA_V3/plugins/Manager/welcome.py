@@ -6,12 +6,12 @@ from PIL import Image, ImageDraw, ImageFont
 from pyrogram import filters, enums
 from pyrogram.types import Message, ChatMemberUpdated, InlineKeyboardMarkup, InlineKeyboardButton
 from pyrogram.errors import TopicClosed, PeerIdInvalid, ChannelPrivate, SlowmodeWait
-from AnnieXMedia import app
-from AnnieXMedia.mongo.welcomedb import is_on, set_state, bump, cool, auto_on
+from BANIYA_MUSIC_V3 import app
+from BANIYA_MUSIC_V3.mongo.welcomedb import is_on, set_state, bump, cool, auto_on
 
-BG_PATH = "AnnieXMedia/assets/annie/welcome.png"
-FALLBACK_PIC = "AnnieXMedia/assets/upic.png"
-FONT_PATH = "AnnieXMedia/assets/annie/Arimo.ttf"
+BG_PATH = "BANIYA_MUSIC_V3/assets/annie/welcome.png"
+FALLBACK_PIC = "BANIYA_MUSIC_V3/assets/upic.png"
+FONT_PATH = "BANIYA_MUSIC_V3/assets/annie/Arimo.ttf"
 
 BTN_VIEW = "๏ ᴠɪᴇᴡ ɴᴇᴡ ᴍᴇᴍʙᴇʀ ๏"
 BTN_ADD = "๏ ᴋɪᴅɴᴀᴘ ᴍᴇ ๏"
@@ -170,7 +170,7 @@ async def welcome(client, update: ChatMemberUpdated):
                 await safe_send(old_msg.delete)
 
     async def cleanup(path):
-        if path and os.path.exists(path) and not os.path.abspath(path).startswith(os.path.abspath("AnnieXMedia/assets")):
+        if path and os.path.exists(path) and not os.path.abspath(path).startswith(os.path.abspath("BANIYA_MUSIC_V3/assets")):
             try:
                 os.remove(path)
             except:

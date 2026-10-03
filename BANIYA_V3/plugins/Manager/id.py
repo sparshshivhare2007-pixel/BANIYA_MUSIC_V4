@@ -3,7 +3,7 @@ from pyrogram import filters
 from pyrogram.enums import ParseMode
 from pyrogram.types import Message
 
-from AnnieXMedia import app
+from BANIYA_MUSIC_V3 import app
 
 
 @app.on_message(filters.command("id"))
