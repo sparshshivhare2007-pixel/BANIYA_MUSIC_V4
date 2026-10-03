@@ -56,6 +56,5 @@ async def get_id(client, message: Message):
 
     await message.reply_text(
         "\n".join(out),
-        disable_web_page_preview=True,
         parse_mode=ParseMode.MARKDOWN,
     )
