@@ -1,12 +1,12 @@
-﻿# Authored By Certified Coders © 2025
+# Authored By Certified Coders © 2025
 import asyncio
 import random
 from pyrogram import filters
-from pyrogram.enums import ChatType
+from pyrogram.enums import ChatMemberStatus, ChatType
 from pyrogram.errors import FloodWait
+
 from BANIYA_V3 import app
-from BANIYA_V3.utils.admin_check import is_admin
-from BANIYA_V3.plugins.misc.funtag_messages import (
+from BANIYA_V3.plugins.Manager._funtag_messages import (
     GN_MESSAGES,
     GM_MESSAGES,
     HI_MESSAGES,
@@ -15,9 +15,33 @@ from BANIYA_V3.plugins.misc.funtag_messages import (
     TAG_ALL,
 )
 
+
+# ────────────────────────────────────────────────────────────
+# is_admin helper (khud define)
+# ────────────────────────────────────────────────────────────
+async def is_admin(message) -> bool:
+    try:
+        member = await app.get_chat_member(
+            message.chat.id, message.from_user.id
+        )
+        return member.status in (
+            ChatMemberStatus.ADMINISTRATOR,
+            ChatMemberStatus.OWNER,
+        )
+    except Exception:
+        return False
+
+
+# ────────────────────────────────────────────────────────────
+# Global state
+# ────────────────────────────────────────────────────────────
 spam_chats = set()
 active_tags = {}
 
+
+# ────────────────────────────────────────────────────────────
+# Core tagging function
+# ────────────────────────────────────────────────────────────
 async def mention_members(client, message, message_pool, stop_cmd):
     chat_id = message.chat.id
 
@@ -58,33 +82,52 @@ async def mention_members(client, message, message_pool, stop_cmd):
     finally:
         spam_chats.discard(chat_id)
         active_tags.pop(chat_id, None)
-        await client.send_message(chat_id, "✅ ᴛᴀɢɢɪɴɢ sᴇssɪᴏɴ ᴇɴᴅᴇᴅ.")
+        try:
+            await client.send_message(chat_id, "✅ ᴛᴀɢɢɪɴɢ sᴇssɪᴏɴ ᴇɴᴅᴇᴅ.")
+        except Exception:
+            pass
 
-@app.on_message(filters.command("gntag", prefixes=["/", "!"]))
+
+# ────────────────────────────────────────────────────────────
+# Commands
+# ────────────────────────────────────────────────────────────
+@app.on_message(filters.command("gntag", prefixes=["/", "!"]) & filters.group)
 async def gntag(client, message):
     await mention_members(client, message, GN_MESSAGES, "gnstop")
 
-@app.on_message(filters.command("gmtag", prefixes=["/", "!"]))
+
+@app.on_message(filters.command("gmtag", prefixes=["/", "!"]) & filters.group)
 async def gmtag(client, message):
     await mention_members(client, message, GM_MESSAGES, "gmstop")
 
-@app.on_message(filters.command("hitag", prefixes=["/", "!"]))
+
+@app.on_message(filters.command("hitag", prefixes=["/", "!"]) & filters.group)
 async def hitag(client, message):
     await mention_members(client, message, HI_MESSAGES, "histop")
 
-@app.on_message(filters.command("lifetag", prefixes=["/", "!"]))
+
+@app.on_message(filters.command("lifetag", prefixes=["/", "!"]) & filters.group)
 async def lifetag(client, message):
     await mention_members(client, message, QUOTES, "lifestop")
 
-@app.on_message(filters.command("shayari", prefixes=["/", "!"]))
+
+@app.on_message(filters.command("shayari", prefixes=["/", "!"]) & filters.group)
 async def shayari_tag(client, message):
     await mention_members(client, message, SHAYARI, "shayarioff")
 
-@app.on_message(filters.command("tagall", prefixes=["/", "!"]))
+
+@app.on_message(filters.command("tagall", prefixes=["/", "!"]) & filters.group)
 async def tag_all(client, message):
     await mention_members(client, message, TAG_ALL, "tagoff")
 
-@app.on_message(filters.command(["gmstop", "gnstop", "histop", "lifestop", "shayarioff", "tagoff", "tagstop"], prefixes=["/", "!"]))
+
+@app.on_message(
+    filters.command(
+        ["gmstop", "gnstop", "histop", "lifestop", "shayarioff", "tagoff", "tagstop"],
+        prefixes=["/", "!"],
+    )
+    & filters.group
+)
 async def stop_tagging(client, message):
     chat_id = message.chat.id
 
