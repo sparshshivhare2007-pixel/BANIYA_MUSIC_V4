@@ -1,4 +1,4 @@
-﻿# Authored By Certified Coders © 2025
+# Authored By Certified Coders © 2025
 import os
 import asyncio
 from functools import lru_cache
@@ -6,8 +6,10 @@ from PIL import Image, ImageDraw, ImageFont
 from pyrogram import filters, enums
 from pyrogram.types import Message, ChatMemberUpdated, InlineKeyboardMarkup, InlineKeyboardButton
 from pyrogram.errors import TopicClosed, PeerIdInvalid, ChannelPrivate, SlowmodeWait
+
 from BANIYA_V3 import app
-from BANIYA_V3.mongo.welcomedb import is_on, set_state, bump, cool, auto_on
+from BANIYA_V3.plugins.Manager._welcomedb import is_on, set_state, bump, cool, auto_on
+
 
 BG_PATH = "BANIYA_V3/assets/annie/welcome.png"
 FALLBACK_PIC = "BANIYA_V3/assets/upic.png"
@@ -35,13 +37,16 @@ WELCOME_LIMIT = 5
 
 last_messages = {}
 
+
 @lru_cache(maxsize=1)
 def cached_bg():
     return Image.open(BG_PATH).convert("RGBA")
 
+
 @lru_cache(maxsize=2)
 def cached_font(size=65):
     return ImageFont.truetype(FONT_PATH, size)
+
 
 def circle(im, size=(835, 839)):
     im = im.resize(size, Image.LANCZOS).convert("RGBA")
@@ -49,6 +54,7 @@ def circle(im, size=(835, 839)):
     ImageDraw.Draw(mask).ellipse((0, 0, *size), fill=255)
     im.putalpha(mask)
     return im
+
 
 def build_pic(av, fn, uid, un):
     os.makedirs("downloads", exist_ok=True)
@@ -64,35 +70,51 @@ def build_pic(av, fn, uid, un):
     bg.save(path)
     return path
 
+
 async def safe_send(func, *args, **kwargs):
     try:
         return await func(*args, **kwargs)
-    except:
+    except Exception:
         return None
+
 
 @app.on_message(filters.command("welcome") & filters.group)
 async def toggle(client, m: Message):
     if len(m.command) != 2:
-        return await m.reply_text("**Usage:**\n⦿/welcome [on|off]\n➤ Annie Special Welcome.....")
-    user_id = m.from_user.id if m.from_user else (m.sender_chat.id if m.sender_chat else None)
+        return await m.reply_text(
+            "**Usage:**\n⦿/welcome [on|off]\n➤ Welcome Notification Setup"
+        )
+    user_id = m.from_user.id if m.from_user else (
+        m.sender_chat.id if m.sender_chat else None
+    )
     if not user_id:
         return
     try:
         u = await client.get_chat_member(m.chat.id, user_id)
-    except:
+    except Exception:
         return
-    if u.status not in (enums.ChatMemberStatus.ADMINISTRATOR, enums.ChatMemberStatus.OWNER):
-        return await m.reply_text("**sᴏʀʀʏ ᴏɴʟʏ ᴀᴅᴍɪɴs ᴄᴀɴ ᴄʜᴀɴɢᴇ ᴡᴇʟᴄᴏᴍᴇ ɴᴏᴛɪғɪᴄᴀᴛɪᴏɴ sᴛᴀᴛᴜs!**")
+    if u.status not in (
+        enums.ChatMemberStatus.ADMINISTRATOR,
+        enums.ChatMemberStatus.OWNER,
+    ):
+        return await m.reply_text(
+            "**sᴏʀʀʏ ᴏɴʟʏ ᴀᴅᴍɪɴs ᴄᴀɴ ᴄʜᴀɴɢᴇ ᴡᴇʟᴄᴏᴍᴇ ɴᴏᴛɪғɪᴄᴀᴛɪᴏɴ sᴛᴀᴛᴜs!**"
+        )
     flag = m.command[1].lower()
     if flag not in ("on", "off"):
-        return await m.reply_text("**Usage:**\n⦿/welcome [on|off]\n➤ Annie Special Welcome.....")
+        return await m.reply_text(
+            "**Usage:**\n⦿/welcome [on|off]"
+        )
     cur = await is_on(m.chat.id)
     if flag == "off" and not cur:
         return await m.reply_text("**ᴡᴇʟᴄᴏᴍᴇ ɴᴏᴛɪғɪᴄᴀᴛɪᴏɴ ᴀʟʀᴇᴀᴅʏ ᴅɪsᴀʙʟᴇᴅ!**")
     if flag == "on" and cur:
         return await m.reply_text("**ᴡᴇʟᴄᴏᴍᴇ ɴᴏᴛɪғɪᴄᴀᴛɪᴏɴ ᴀʟʀᴇᴀᴅʏ ᴇɴᴀʙʟᴇᴅ!**")
     await set_state(m.chat.id, flag)
-    await m.reply_text(f"**{'ᴇɴᴀʙʟᴇᴅ' if flag == 'on' else 'ᴅɪsᴀʙʟᴇᴅ'} ᴡᴇʟᴄᴏᴍᴇ ɪɴ {m.chat.title}**")
+    await m.reply_text(
+        f"**{'ᴇɴᴀʙʟᴇᴅ' if flag == 'on' else 'ᴅɪsᴀʙʟᴇᴅ'} ᴡᴇʟᴄᴏᴍᴇ ɪɴ {m.chat.title}**"
+    )
+
 
 @app.on_chat_member_updated(filters.group, group=-3)
 async def welcome(client, update: ChatMemberUpdated):
@@ -108,13 +130,13 @@ async def welcome(client, update: ChatMemberUpdated):
     if not hasattr(client, "cached_me"):
         try:
             client.cached_me = await client.get_me()
-        except:
+        except Exception:
             return
     me = client.cached_me
 
     try:
         await client.get_chat_member(cid, me.id)
-    except:
+    except Exception:
         return
 
     if not await is_on(cid):
@@ -127,7 +149,11 @@ async def welcome(client, update: ChatMemberUpdated):
     if burst >= JOIN_THRESHOLD:
         minutes = min(60, COOL_MINUTES + max(0, burst - JOIN_THRESHOLD) * 2)
         await cool(cid, minutes)
-        await safe_send(client.send_message, cid, f"**ᴍᴀssɪᴠᴇ ᴊᴏɪɴ ᴅᴇᴛᴇᴄᴛᴇᴅ (x{burst}). ᴡᴇʟᴄᴏᴍᴇ ᴍᴇssᴀɢᴇs ᴅɪsᴀʙʟᴇᴅ ғᴏʀ {minutes} ᴍɪɴᴜᴛᴇs.**")
+        await safe_send(
+            client.send_message,
+            cid,
+            f"**ᴍᴀssɪᴠᴇ ᴊᴏɪɴ ᴅᴇᴛᴇᴄᴛᴇᴅ (x{burst}). ᴡᴇʟᴄᴏᴍᴇ ᴍᴇssᴀɢᴇs ᴅɪsᴀʙʟᴇᴅ ғᴏʀ {minutes} ᴍɪɴᴜᴛᴇs.**",
+        )
         return
 
     user = new.user
@@ -135,11 +161,24 @@ async def welcome(client, update: ChatMemberUpdated):
     if user.photo and hasattr(user.photo, "big_file_id"):
         file_id = user.photo.big_file_id
 
-    avatar = await safe_send(client.download_media, file_id, file_name=f"downloads/pp_{user.id}.png") if file_id else None
+    avatar = None
+    if file_id:
+        avatar = await safe_send(
+            client.download_media,
+            file_id,
+            file_name=f"downloads/pp_{user.id}.png",
+        )
     if not avatar:
         avatar = FALLBACK_PIC
 
-    img = build_pic(avatar, user.first_name, user.id, user.username or "No Username")
+    # Image generation with fallback (agar bg/font nahi mile toh skip karo)
+    img = None
+    try:
+        img = build_pic(
+            avatar, user.first_name, user.id, user.username or "No Username"
+        )
+    except Exception as e:
+        print(f"[WELCOME] Image generation failed: {e}")
 
     members = await safe_send(client.get_chat_members_count, cid) or "?"
 
@@ -148,19 +187,24 @@ async def welcome(client, update: ChatMemberUpdated):
         mention=user.mention,
         uid=user.id,
         uname=user.username or "No Username",
-        count=members
+        count=members,
     )
 
-    sent = await safe_send(
-        client.send_photo,
-        cid,
-        img,
-        caption=caption,
-        reply_markup=InlineKeyboardMarkup([
-            [InlineKeyboardButton(BTN_VIEW, url=f"tg://openmessage?user_id={user.id}")],
-            [InlineKeyboardButton(BTN_ADD, url=f"https://t.me/{me.username}?startgroup=true")],
-        ])
-    )
+    keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton(BTN_VIEW, url=f"tg://openmessage?user_id={user.id}")],
+        [InlineKeyboardButton(BTN_ADD, url=f"https://t.me/{me.username}?startgroup=true")],
+    ])
+
+    sent = None
+    if img and os.path.exists(img):
+        sent = await safe_send(
+            client.send_photo, cid, img, caption=caption, reply_markup=keyboard
+        )
+    # Agar image nahi bani toh text message bhej do
+    if not sent:
+        sent = await safe_send(
+            client.send_message, cid, caption, reply_markup=keyboard
+        )
 
     if sent:
         last_messages.setdefault(cid, []).append(sent)
@@ -170,11 +214,16 @@ async def welcome(client, update: ChatMemberUpdated):
                 await safe_send(old_msg.delete)
 
     async def cleanup(path):
-        if path and os.path.exists(path) and not os.path.abspath(path).startswith(os.path.abspath("BANIYA_V3/assets")):
+        if (
+            path
+            and os.path.exists(path)
+            and not os.path.abspath(path).startswith(os.path.abspath("BANIYA_V3/assets"))
+        ):
             try:
                 os.remove(path)
-            except:
+            except Exception:
                 pass
 
     asyncio.create_task(cleanup(avatar))
-    asyncio.create_task(cleanup(img))
+    if img:
+        asyncio.create_task(cleanup(img))
