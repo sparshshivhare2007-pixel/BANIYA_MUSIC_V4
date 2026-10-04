@@ -7,6 +7,11 @@ from pyrogram import filters, types
 
 from BANIYA_V3 import app, config, db, lang, queue
 from BANIYA_V3.helpers import Track, buttons, thumb
+from BANIYA_V3.utils.rich_utils import (
+    _html_caption_to_blocks,
+    _progress_row,
+    _random_styles,
+)
 
 
 @app.on_message(filters.command(["queue", "playing"]) & filters.group & ~app.bl_users)
@@ -18,11 +23,15 @@ async def _queue_func(_, m: types.Message):
     _reply = await m.reply_text(m.lang["queue_fetching"])
     _queue = queue.get_queue(m.chat.id)
     _media = _queue[0]
+
+    # Generate thumbnail
     _thumb = (
         await thumb.generate(_media)
         if isinstance(_media, Track)
         else config.DEFAULT_THUMB
     ) if config.THUMB_GEN else None
+
+    # Build the caption HTML (with premium emoji tags intact)
     _text = m.lang["queue_curr"].format(
         _media.url,
         _media.title[:50],
@@ -41,22 +50,53 @@ async def _queue_func(_, m: types.Message):
             )
         _text += "</blockquote>"
 
+    # ---------- Build rich message blocks ----------
+    blocks = []
+    if _thumb:
+        blocks.append(types.InputRichBlockPhoto(photo=types.InputMediaPhoto(_thumb)))
+    blocks += _html_caption_to_blocks(_text)
+
+    # Add the pause/resume toggle button as a rich button
     _playing = await db.playing(m.chat.id)
-    _buttons = buttons.queue_markup(
-            m.chat.id,
-            m.lang["playing"] if _playing else m.lang["paused"],
-            _playing,
+    toggle_text = m.lang["playing"] if _playing else m.lang["paused"]
+    blocks.append(
+        types.InputRichBlockButtons(
+            buttons=[
+                types.RichMessageButton(
+                    text=toggle_text,
+                    style=(
+                        types.ButtonStyle.SUCCESS
+                        if _playing
+                        else types.ButtonStyle.PRIMARY
+                    ),
+                    callback_data=(
+                        f"controls pause {m.chat.id}"
+                        if _playing
+                        else f"controls resume {m.chat.id}"
+                    ),
+                ),
+            ]
         )
-    if thumb:
-        await _reply.edit_media(
-            media=types.InputMediaPhoto(
-                media=_thumb,
-                caption=_text,
-            ),
-            reply_markup=_buttons,
-        )
-    else:
-        await _reply.edit_text(
-            text=_text,
-            reply_markup=_buttons,
-        )
+    )
+
+    # ---------- Send as rich message ----------
+    rich = types.InputRichMessage(blocks=blocks)
+    try:
+        await _reply.edit_text(rich_message=rich)
+    except Exception:
+        # If editing fails, send fresh rich message
+        try:
+            await _reply.delete()
+        except Exception:
+            pass
+        try:
+            await app.send_rich_message(
+                chat_id=m.chat.id,
+                rich_message=rich,
+            )
+        except Exception:
+            # Final fallback — plain text without emoji tags
+            plain = _text.replace("<u>", "").replace("</u>", "")
+            import re as _re
+            plain = _re.sub(r"<emoji[^>]*>(.*?)</emoji>", r"\1", plain)
+            await m.reply_text(plain)
