@@ -1,6 +1,6 @@
 # Copyright (c) 2025 BANIYA_V3mousX1025
 # Licensed under the MIT License.
-# Rich message helpers for now-playing UI
+# This file is part of AnonXMusic
 
 import math
 import random
@@ -11,9 +11,9 @@ from pyrogram import enums, errors, types
 from BANIYA_V3 import lang as _lang_obj, logger
 
 
-# ---------- Helpers ----------
+# ---------------------------------------------------------------- helpers
 
-def _time_to_seconds(t: str) -> int:
+def _time_to_seconds(t) -> int:
     """Convert '3:10' or '1:02:30' to total seconds."""
     if not t:
         return 0
@@ -175,6 +175,8 @@ def _control_rows(lang_dict, chat_id, playing, styles):
         ),
     ]
 
+
+# ---------------------------------------------------------------- public API
 
 def build_now_playing_blocks(photo, caption_html, chat_id, lang_dict=None,
                              played=None, dur=None, playing=True):
