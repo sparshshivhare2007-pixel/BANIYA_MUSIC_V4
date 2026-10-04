@@ -37,7 +37,7 @@ async def _controls(_, query: types.CallbackQuery):
                 pass
             return
 
-    # Silent handlers — rich message button presses that should not edit anything
+    # Silent handler for rich message "status" / "GetTimer" taps
     if action == "status":
         return await query.answer()
 
@@ -50,9 +50,10 @@ async def _controls(_, query: types.CallbackQuery):
             )
         await anon.pause(chat_id)
         if qaction:
-            return await query.edit_message_reply_markup(
-                reply_markup=buttons.queue_markup(chat_id, query.lang["paused"], False)
-            )
+            kb = buttons.queue_markup(chat_id, query.lang["paused"], False)
+            if kb is not None:
+                return await query.edit_message_reply_markup(reply_markup=kb)
+            return
         status = query.lang["paused"]
         reply = query.lang["play_paused"].format(user)
 
@@ -61,9 +62,10 @@ async def _controls(_, query: types.CallbackQuery):
             return await query.answer(query.lang["play_not_paused"], show_alert=True)
         await anon.resume(chat_id)
         if qaction:
-            return await query.edit_message_reply_markup(
-                reply_markup=buttons.queue_markup(chat_id, query.lang["playing"], True)
-            )
+            kb = buttons.queue_markup(chat_id, query.lang["playing"], True)
+            if kb is not None:
+                return await query.edit_message_reply_markup(reply_markup=kb)
+            return
         reply = query.lang["play_resumed"].format(user)
 
     elif action == "skip":
@@ -104,7 +106,7 @@ async def _controls(_, query: types.CallbackQuery):
         status = query.lang["stopped"]
         reply = query.lang["play_stopped"].format(user)
 
-    # --- Close button: just delete message, DON'T stop playback ---
+    # Close button — just delete the message, don't stop the stream
     elif action == "close":
         try:
             await query.message.delete()
@@ -125,7 +127,7 @@ async def _controls(_, query: types.CallbackQuery):
         return
 
     try:
-        # For rich messages (no .text / .caption) → just reply + delete, no keyboard
+        # Rich messages (no .text / .caption) → only reply + delete, NO keyboard
         is_rich = not (
             (query.message.text and query.message.text.html)
             or (query.message.caption and query.message.caption.html)
@@ -141,7 +143,6 @@ async def _controls(_, query: types.CallbackQuery):
             except Exception:
                 pass
         else:
-            # Classic message — keep the old behaviour (edit text + keyboard)
             mtext = re.sub(
                 r"\n\n<blockquote>.*?</blockquote>",
                 "",
@@ -151,9 +152,10 @@ async def _controls(_, query: types.CallbackQuery):
             keyboard = buttons.controls(
                 chat_id, status=status if action != "resume" else None
             )
-            await query.edit_message_text(
-                f"{mtext}\n\n<blockquote>{reply}</blockquote>", reply_markup=keyboard
-            )
+            kwargs = {"text": f"{mtext}\n\n<blockquote>{reply}</blockquote>"}
+            if keyboard is not None:
+                kwargs["reply_markup"] = keyboard
+            await query.edit_message_text(**kwargs)
     except Exception:
         pass
 
