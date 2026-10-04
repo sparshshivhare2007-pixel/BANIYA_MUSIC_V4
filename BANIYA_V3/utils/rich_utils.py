@@ -14,7 +14,6 @@ from BANIYA_V3 import lang as _lang_obj, logger
 # ---------------------------------------------------------------- helpers
 
 def _time_to_seconds(t) -> int:
-    """Convert '3:10' or '1:02:30' to total seconds."""
     if not t:
         return 0
     try:
@@ -24,27 +23,66 @@ def _time_to_seconds(t) -> int:
     return sum(p * 60 ** i for i, p in enumerate(reversed(parts)))
 
 
+# Catch <b>, <a href="...">, and <emoji id='...'> in one regex
+_TAG_RE = re.compile(
+    r"<(/?)(b|a|emoji)(?:\s+(?:href|id)=([^>]+))?>",
+    re.IGNORECASE,
+)
+
+
 def _parse_inline(segment):
     parts = []
     stack = []
     pos = 0
 
-    for m in re.finditer(r"<(/?)(b|a)(?:\s+href=([^>]+))?>", segment, re.IGNORECASE):
+    for m in _TAG_RE.finditer(segment):
         if m.start() > pos:
             parts.append(segment[pos:m.start()])
         pos = m.end()
-        closing, tag, href = m.group(1), m.group(2).lower(), m.group(3)
+
+        closing = m.group(1)
+        tag = m.group(2).lower()
+        attr = m.group(3)
+        attr_val = attr.strip("\"'") if attr else None
+
         if not closing:
-            stack.append((tag, href.strip("\"'") if href else None, len(parts)))
-        elif stack and stack[-1][0] == tag:
+            stack.append((tag, attr_val, len(parts)))
+            continue
+
+        if stack and stack[-1][0] == tag:
             open_tag, url, start = stack.pop()
             inner = parts[start:]
             del parts[start:]
-            inner = inner[0] if len(inner) == 1 else inner if inner else ""
+
+            if len(inner) == 0:
+                inner = ""
+            elif len(inner) == 1:
+                inner = inner[0]
+
             if open_tag == "b":
                 parts.append(types.RichTextBold(text=inner))
-            else:
+
+            elif open_tag == "a":
                 parts.append(types.RichTextUrl(text=inner, url=url))
+
+            elif open_tag == "emoji":
+                # custom_emoji_id must be a string
+                emoji_id = str(url) if url else None
+                if not emoji_id:
+                    # No ID — just fall back to plain text
+                    parts.append(inner)
+                    continue
+                alt = inner if isinstance(inner, str) and inner else "🙂"
+                try:
+                    parts.append(
+                        types.RichTextCustomEmoji(
+                            custom_emoji_id=emoji_id,
+                            alternative_text=alt,
+                        )
+                    )
+                except Exception:
+                    # If construction fails, keep the glyph as plain text
+                    parts.append(alt)
 
     if pos < len(segment):
         parts.append(segment[pos:])
