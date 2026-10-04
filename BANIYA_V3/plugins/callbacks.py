@@ -37,8 +37,10 @@ async def _controls(_, query: types.CallbackQuery):
                 pass
             return
 
+    # Silent handlers — rich message button presses that should not edit anything
     if action == "status":
         return await query.answer()
+
     await query.answer(query.lang["processing"], show_alert=True)
 
     if action == "pause":
@@ -102,15 +104,13 @@ async def _controls(_, query: types.CallbackQuery):
         status = query.lang["stopped"]
         reply = query.lang["play_stopped"].format(user)
 
-    # --- Close button: sirf message delete, gaana NAHI roko ---
+    # --- Close button: just delete message, DON'T stop playback ---
     elif action == "close":
-        # Purana message delete karo
         try:
             await query.message.delete()
         except Exception:
             pass
 
-        # Naya message bhejo "Closed by <user>"
         try:
             await app.send_message(
                 chat_id=chat_id,
@@ -125,10 +125,23 @@ async def _controls(_, query: types.CallbackQuery):
         return
 
     try:
-        if action in ["skip", "replay", "stop"]:
-            await query.message.reply_text(reply, quote=False)
-            await query.message.delete()
+        # For rich messages (no .text / .caption) → just reply + delete, no keyboard
+        is_rich = not (
+            (query.message.text and query.message.text.html)
+            or (query.message.caption and query.message.caption.html)
+        )
+
+        if is_rich or action in ["skip", "replay", "stop"]:
+            try:
+                await query.message.reply_text(reply, quote=False)
+            except Exception:
+                pass
+            try:
+                await query.message.delete()
+            except Exception:
+                pass
         else:
+            # Classic message — keep the old behaviour (edit text + keyboard)
             mtext = re.sub(
                 r"\n\n<blockquote>.*?</blockquote>",
                 "",
@@ -138,9 +151,9 @@ async def _controls(_, query: types.CallbackQuery):
             keyboard = buttons.controls(
                 chat_id, status=status if action != "resume" else None
             )
-        await query.edit_message_text(
-            f"{mtext}\n\n<blockquote>{reply}</blockquote>", reply_markup=keyboard
-        )
+            await query.edit_message_text(
+                f"{mtext}\n\n<blockquote>{reply}</blockquote>", reply_markup=keyboard
+            )
     except Exception:
         pass
 
