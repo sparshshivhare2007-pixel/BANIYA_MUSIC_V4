@@ -4,11 +4,12 @@
 
 from pathlib import Path
 
-from pyrogram import filters, types
+from pyrogram import enums, filters, types
 
 from BANIYA_V3 import anon, app, config, db, lang, queue, tg, yt
 from BANIYA_V3.helpers import buttons, utils
 from BANIYA_V3.helpers._play import checkUB
+from BANIYA_V3.utils.rich_utils import _html_caption_to_blocks
 
 
 def playlist_to_queue(chat_id: int, tracks: list) -> str:
@@ -18,6 +19,60 @@ def playlist_to_queue(chat_id: int, tracks: list) -> str:
         text += f"<b>{pos}.</b> {track.title}\n"
     text = text[:1948] + "</blockquote>"
     return text
+
+
+async def _send_queued_rich(client, chat_id, message, text, file_id, lang_dict):
+    """Send a queued-track notification as a rich message."""
+    blocks = _html_caption_to_blocks(text)
+
+    play_now_text = (lang_dict or {}).get("play_now", "▶ Play Now")
+    skip_text     = (lang_dict or {}).get("skipped", "» Skip")
+    end_text      = (lang_dict or {}).get("stopped", "🚫 End")
+
+    blocks.append(
+        types.InputRichBlockButtons(
+            buttons=[
+                types.RichMessageButton(
+                    text=play_now_text,
+                    style=enums.ButtonStyle.SUCCESS,
+                    callback_data=f"controls force {chat_id} {file_id}",
+                ),
+            ]
+        )
+    )
+    blocks.append(
+        types.InputRichBlockButtons(
+            buttons=[
+                types.RichMessageButton(
+                    text=skip_text,
+                    style=enums.ButtonStyle.PRIMARY,
+                    callback_data=f"controls skip {chat_id}",
+                ),
+                types.RichMessageButton(
+                    text=end_text,
+                    style=enums.ButtonStyle.DANGER,
+                    callback_data=f"controls stop {chat_id}",
+                ),
+            ]
+        )
+    )
+
+    rich = types.InputRichMessage(blocks=blocks)
+    try:
+        return await message.edit_text(rich_message=rich)
+    except Exception:
+        try:
+            await message.delete()
+        except Exception:
+            pass
+        try:
+            return await client.send_rich_message(
+                chat_id=chat_id,
+                rich_message=rich,
+            )
+        except Exception:
+            # Fallback: send raw string (may show tags if unsupported)
+            return await client.send_message(chat_id=chat_id, text=text)
 
 
 # ========== AUDIO PLAY COMMANDS ==========
@@ -96,17 +151,20 @@ async def play_hndlr(
         position = queue.add(m.chat.id, file)
 
         if position != 0 or await db.get_call(m.chat.id):
-            await sent.edit_text(
-                m.lang["play_queued"].format(
-                    position,
-                    file.url,
-                    file.title,
-                    file.duration,
-                    m.from_user.mention,
-                ),
-                reply_markup=buttons.play_queued(
-                    m.chat.id, file.id, m.lang["play_now"]
-                ),
+            _queued_text = m.lang["play_queued"].format(
+                position,
+                file.url,
+                file.title,
+                file.duration,
+                m.from_user.mention,
+            )
+            await _send_queued_rich(
+                client=app,
+                chat_id=m.chat.id,
+                message=sent,
+                text=_queued_text,
+                file_id=file.id,
+                lang_dict=m.lang,
             )
             if tracks:
                 added = playlist_to_queue(m.chat.id, tracks)
@@ -215,17 +273,20 @@ async def vplay_hndlr(
         position = queue.add(m.chat.id, file)
 
         if position != 0 or await db.get_call(m.chat.id):
-            await sent.edit_text(
-                m.lang["play_queued"].format(
-                    position,
-                    file.url,
-                    file.title,
-                    file.duration,
-                    m.from_user.mention,
-                ),
-                reply_markup=buttons.play_queued(
-                    m.chat.id, file.id, m.lang["play_now"]
-                ),
+            _queued_text = m.lang["play_queued"].format(
+                position,
+                file.url,
+                file.title,
+                file.duration,
+                m.from_user.mention,
+            )
+            await _send_queued_rich(
+                client=app,
+                chat_id=m.chat.id,
+                message=sent,
+                text=_queued_text,
+                file_id=file.id,
+                lang_dict=m.lang,
             )
             if tracks:
                 added = playlist_to_queue(m.chat.id, tracks)
