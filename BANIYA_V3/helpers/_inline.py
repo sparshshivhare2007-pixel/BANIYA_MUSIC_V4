@@ -20,43 +20,12 @@ class Inline:
         )
 
     def controls(self, chat_id: int, status: str = None, timer: str = None, remove: bool = False):
-        keyboard = []
-
-        if status:
-            keyboard.append(
-                [self.ikb(text=status, callback_data=f"controls status {chat_id}", style=ButtonStyle.DEFAULT)]
-            )
-        elif timer:
-            keyboard.append(
-                [self.ikb(text=timer, callback_data=f"controls status {chat_id}", style=ButtonStyle.DEFAULT)]
-            )
-
-        if not remove:
-            # Normal controls row (5 buttons)
-            keyboard.append(
-                [
-                    self.ikb("▷", callback_data=f"controls resume {chat_id}", style=ButtonStyle.SUCCESS),
-                    self.ikb("II", callback_data=f"controls pause {chat_id}", style=ButtonStyle.PRIMARY),
-                    self.ikb("⥁", callback_data=f"controls replay {chat_id}", style=ButtonStyle.DEFAULT),
-                    self.ikb("‣‣I", callback_data=f"controls skip {chat_id}", style=ButtonStyle.PRIMARY),
-                    self.ikb("▢", callback_data=f"controls stop {chat_id}", style=ButtonStyle.DANGER),
-                ]
-            )
-            # Naya Close row (1 button — full width)
-            keyboard.append(
-                [
-                    self.ikb("✖️ Close", callback_data=f"controls close {chat_id}", style=ButtonStyle.DANGER),
-                ]
-            )
-        else:
-            # Agar remove=True hai (stream band ho gaya), tab bhi Close button dikhaye
-            keyboard.append(
-                [
-                    self.ikb("✖️ Close", callback_data=f"controls close {chat_id}", style=ButtonStyle.DANGER),
-                ]
-            )
-
-        return self.ikm(keyboard)
+        """
+        Controls keyboard is disabled.
+        Rich messages handle all control buttons now.
+        Returns None so no inline keyboard appears on the now-playing message.
+        """
+        return None
 
     def help_markup(self, _lang: dict, back: bool = False):
         if back:
@@ -102,11 +71,11 @@ class Inline:
         )
 
     def queue_markup(self, chat_id: int, _text: str, playing: bool):
-        action = "pause" if playing else "resume"
-
-        return self.ikm(
-            [[self.ikb(text=_text, callback_data=f"controls {action} {chat_id} q", style=ButtonStyle.PRIMARY)]]
-        )
+        """
+        Queue markup is disabled.
+        Rich messages handle all control buttons now.
+        """
+        return None
 
     def settings_markup(self, lang: dict, admin_only: bool, cmd_delete: bool, language: str, chat_id: int):
         return self.ikm(
