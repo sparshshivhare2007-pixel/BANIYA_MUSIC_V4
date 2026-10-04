@@ -1,6 +1,6 @@
 # Copyright (c) 2025 BANIYA_V3mousX1025
 # Licensed under the MIT License.
-# This file is part of AnonXMusic
+# This file is part of AnonXMusi
 
 import math
 import random
