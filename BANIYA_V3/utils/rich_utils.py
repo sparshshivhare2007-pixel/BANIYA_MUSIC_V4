@@ -11,8 +11,6 @@ from pyrogram import enums, errors, types
 from BANIYA_V3 import lang as _lang_obj, logger
 
 
-# ---------------------------------------------------------------- helpers
-
 def _time_to_seconds(t) -> int:
     if not t:
         return 0
@@ -23,11 +21,17 @@ def _time_to_seconds(t) -> int:
     return sum(p * 60 ** i for i, p in enumerate(reversed(parts)))
 
 
-# Catch <b>, <a href="...">, and <emoji id='...'> in one regex
-_TAG_RE = re.compile(
-    r"<(/?)(b|a|emoji)(?:\s+(?:href|id)=([^>]+))?>",
-    re.IGNORECASE,
-)
+# Strip <emoji id='...'>X</emoji> to X, and parse <b>/<a href> normally
+_EMOJI_RE = re.compile(r"<emoji id='[^']*'>(.*?)</emoji>", re.IGNORECASE)
+_EMOJI_RE_DQ = re.compile(r'<emoji id="[^"]*">(.*?)</emoji>', re.IGNORECASE)
+_TAG_RE = re.compile(r"<(/?)(b|a)(?:\s+href=([^>]+))?>", re.IGNORECASE)
+
+
+def _strip_emoji_tags(text: str) -> str:
+    """Replace <emoji id='...'>X</emoji> with X."""
+    text = _EMOJI_RE.sub(r"\1", text)
+    text = _EMOJI_RE_DQ.sub(r"\1", text)
+    return text
 
 
 def _parse_inline(segment):
@@ -61,28 +65,8 @@ def _parse_inline(segment):
 
             if open_tag == "b":
                 parts.append(types.RichTextBold(text=inner))
-
             elif open_tag == "a":
                 parts.append(types.RichTextUrl(text=inner, url=url))
-
-            elif open_tag == "emoji":
-                # custom_emoji_id must be a string
-                emoji_id = str(url) if url else None
-                if not emoji_id:
-                    # No ID — just fall back to plain text
-                    parts.append(inner)
-                    continue
-                alt = inner if isinstance(inner, str) and inner else "🙂"
-                try:
-                    parts.append(
-                        types.RichTextCustomEmoji(
-                            custom_emoji_id=emoji_id,
-                            alternative_text=alt,
-                        )
-                    )
-                except Exception:
-                    # If construction fails, keep the glyph as plain text
-                    parts.append(alt)
 
     if pos < len(segment):
         parts.append(segment[pos:])
@@ -111,9 +95,11 @@ def _balance_lines(caption_html):
 
 
 def _html_caption_to_blocks(caption_html):
+    # First, strip <emoji> tags — replace with their glyph text
+    clean = _strip_emoji_tags(caption_html)
     return [
         types.InputRichBlockParagraph(text=_parse_inline(line))
-        for line in _balance_lines(caption_html)
+        for line in _balance_lines(clean)
     ]
 
 
@@ -166,7 +152,7 @@ def _progress_row(played, dur, style):
             types.RichMessageButton(
                 text=_progress_line(played, dur),
                 style=style,
-                callback_data="GetTimer",
+                callback_data="controls status",  # harmless, no-op
             )
         ]
     )
@@ -175,16 +161,22 @@ def _progress_row(played, dur, style):
 def _control_rows(lang_dict, chat_id, playing, styles):
     replay_style, toggle_style, skip_style, queue_style = styles
 
-    replay_text = (lang_dict or {}).get("RICH_BTN_REPLAY", "🔁 ʀᴇᴘʟᴀʏ")
-    pause_text  = (lang_dict or {}).get("RICH_BTN_PAUSE",  "⏸ ᴘᴀᴜsᴇ")
-    resume_text = (lang_dict or {}).get("RICH_BTN_RESUME", "▶️ ʀᴇsᴜᴍᴇ")
-    skip_text   = (lang_dict or {}).get("RICH_BTN_SKIP",   "⏭ sᴋɪᴘ")
-    queue_text  = (lang_dict or {}).get("RICH_BTN_QUEUE",  "≡ ǫᴜᴇᴜᴇ")
+    # These texts come from en.json, fallback to defaults
+    replay_text = (lang_dict or {}).get("play_replay", "Replay")
+    pause_text  = (lang_dict or {}).get("paused", "Pause")
+    resume_text = (lang_dict or {}).get("playing", "Resume")
+    skip_text   = (lang_dict or {}).get("skipped", "Skip")
+    queue_text  = (lang_dict or {}).get("queue_curr", "Queue")
 
+    # ⚠️ IMPORTANT: callback_data uses "controls" prefix so the
+    # existing @app.on_callback_query(filters.regex("controls")) handles it.
     toggle = types.RichMessageButton(
         text=pause_text if playing else resume_text,
         style=toggle_style,
-        callback_data=f"ADMIN {'Pause' if playing else 'Resume'}|{chat_id}",
+        callback_data=(
+            f"controls pause {chat_id}" if playing
+            else f"controls resume {chat_id}"
+        ),
     )
     return [
         types.InputRichBlockButtons(
@@ -192,13 +184,13 @@ def _control_rows(lang_dict, chat_id, playing, styles):
                 types.RichMessageButton(
                     text=replay_text,
                     style=replay_style,
-                    callback_data=f"ADMIN Replay|{chat_id}",
+                    callback_data=f"controls replay {chat_id}",
                 ),
                 toggle,
                 types.RichMessageButton(
                     text=skip_text,
                     style=skip_style,
-                    callback_data=f"ADMIN Skip|{chat_id}",
+                    callback_data=f"controls skip {chat_id}",
                 ),
             ]
         ),
@@ -207,14 +199,12 @@ def _control_rows(lang_dict, chat_id, playing, styles):
                 types.RichMessageButton(
                     text=queue_text,
                     style=queue_style,
-                    callback_data=f"nowplaying_queue {chat_id}",
+                    callback_data=f"controls status {chat_id}",
                 ),
             ]
         ),
     ]
 
-
-# ---------------------------------------------------------------- public API
 
 def build_now_playing_blocks(photo, caption_html, chat_id, lang_dict=None,
                              played=None, dur=None, playing=True):
