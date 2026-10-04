@@ -23,23 +23,10 @@ def _time_to_seconds(t) -> int:
     return sum(p * 60 ** i for i, p in enumerate(reversed(parts)))
 
 
-# Strip <emoji id='...'>X</emoji> and <emoji id="...">X</emoji> → X
-_EMOJI_RE_SQ = re.compile(r"<emoji id='[^']*'>(.*?)</emoji>", re.IGNORECASE | re.DOTALL)
-_EMOJI_RE_DQ = re.compile(r'<emoji id="[^"]*">(.*?)</emoji>', re.IGNORECASE | re.DOTALL)
-
-
-def _strip_emoji_tags(text: str) -> str:
-    """Replace <emoji id='...'>X</emoji> with X (glyph only)."""
-    if not text:
-        return text
-    text = _EMOJI_RE_SQ.sub(r"\1", text)
-    text = _EMOJI_RE_DQ.sub(r"\1", text)
-    return text
-
-
-# One pass regex — order matters: emoji (self-closing-ish) first, then b/i/u, then a
+# One regex catches: <b>, <i>, <u>, <a href="...">, and <emoji id="...">
+# For <emoji>, the "id" is captured in the same slot as href for <a>.
 _TAG_RE = re.compile(
-    r"<(/?)(b|i|u|a)(?:\s+href=([^>]+))?>",
+    r"<(/?)(b|i|u|a|emoji)(?:\s+(?:href|id)=([^>]+))?>",
     re.IGNORECASE,
 )
 
@@ -47,7 +34,8 @@ _TAG_RE = re.compile(
 def _parse_inline(segment):
     """
     Parse a single line of HTML-ish markup into rich text nodes.
-    Supports: <b>, <i>, <u>, <a href="...">, and raw text.
+    Supports: <b>, <i>, <u>, <a href="...">, <emoji id="...">, raw text.
+    Premium emoji are preserved as RichTextCustomEmoji.
     """
     parts = []
     stack = []
@@ -68,7 +56,7 @@ def _parse_inline(segment):
             continue
 
         if stack and stack[-1][0] == tag:
-            open_tag, url, start = stack.pop()
+            open_tag, url_or_id, start = stack.pop()
             inner = parts[start:]
             del parts[start:]
 
@@ -80,20 +68,29 @@ def _parse_inline(segment):
             if open_tag == "b":
                 parts.append(types.RichTextBold(text=inner))
             elif open_tag == "i":
-                # RichTextItalic may or may not exist depending on Pyrogram version
                 italic_cls = getattr(types, "RichTextItalic", None)
-                if italic_cls is not None:
-                    parts.append(italic_cls(text=inner))
-                else:
-                    parts.append(inner)
+                parts.append(italic_cls(text=inner) if italic_cls else inner)
             elif open_tag == "u":
                 underline_cls = getattr(types, "RichTextUnderline", None)
-                if underline_cls is not None:
-                    parts.append(underline_cls(text=inner))
-                else:
-                    parts.append(inner)
+                parts.append(underline_cls(text=inner) if underline_cls else inner)
             elif open_tag == "a":
-                parts.append(types.RichTextUrl(text=inner, url=url))
+                parts.append(types.RichTextUrl(text=inner, url=url_or_id))
+            elif open_tag == "emoji":
+                # Premium emoji — keep as RichTextCustomEmoji
+                emoji_id = str(url_or_id) if url_or_id else None
+                alt = inner if isinstance(inner, str) and inner else "🙂"
+                if not emoji_id:
+                    parts.append(alt)
+                    continue
+                try:
+                    parts.append(
+                        types.RichTextCustomEmoji(
+                            custom_emoji_id=emoji_id,
+                            alternative_text=alt,
+                        )
+                    )
+                except Exception:
+                    parts.append(alt)
 
     if pos < len(segment):
         parts.append(segment[pos:])
@@ -122,12 +119,11 @@ def _balance_lines(caption_html):
 
 
 def _html_caption_to_blocks(caption_html):
-    # 1) strip <emoji> tags → keep glyph
-    # 2) parse each line into rich text nodes
-    clean = _strip_emoji_tags(caption_html)
+    # Keep <emoji> tags intact so they render as PREMIUM emoji.
+    # No stripping — the parser converts them into RichTextCustomEmoji.
     return [
         types.InputRichBlockParagraph(text=_parse_inline(line))
-        for line in _balance_lines(clean)
+        for line in _balance_lines(caption_html)
     ]
 
 
