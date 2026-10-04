@@ -86,33 +86,53 @@ class TgCall(PyTgCalls):
                     media.duration,
                     media.user,
                 )
-                keyboard = buttons.controls(chat_id)
-                try:
-                    if _thumb:
-                        await message.edit_media(
-                            media=InputMediaPhoto(
-                                media=_thumb,
-                                caption=text,
-                            ),
-                            reply_markup=keyboard,
-                        )
-                    else:
-                        await message.edit_text(text, reply_markup=keyboard)
-                except (ChatSendMediaForbidden, ChatSendPhotosForbidden, MessageIdInvalid):
-                    if _thumb:
-                        sent = await app.send_photo(
+
+                # ---- Try rich message first ----
+                rich_sent = False
+                if _thumb:
+                    try:
+                        from BANIYA_V3.utils.rich_utils import send_now_playing_rich
+                        sent = await send_now_playing_rich(
+                            client=app,
                             chat_id=chat_id,
                             photo=_thumb,
-                            caption=text,
-                            reply_markup=keyboard,
+                            caption_html=text,
+                            replace=message,
                         )
-                    else:
-                        sent = await app.send_message(
-                            chat_id=chat_id,
-                            text=text,
-                            reply_markup=keyboard,
-                        )
-                    media.message_id = sent.id
+                        media.message_id = sent.id
+                        rich_sent = True
+                    except Exception as e:
+                        logger.warning(f"[RICH] now-playing failed: {e}")
+
+                # ---- Fallback to classic edit/send ----
+                if not rich_sent:
+                    keyboard = buttons.controls(chat_id)
+                    try:
+                        if _thumb:
+                            await message.edit_media(
+                                media=InputMediaPhoto(
+                                    media=_thumb,
+                                    caption=text,
+                                ),
+                                reply_markup=keyboard,
+                            )
+                        else:
+                            await message.edit_text(text, reply_markup=keyboard)
+                    except (ChatSendMediaForbidden, ChatSendPhotosForbidden, MessageIdInvalid):
+                        if _thumb:
+                            sent = await app.send_photo(
+                                chat_id=chat_id,
+                                photo=_thumb,
+                                caption=text,
+                                reply_markup=keyboard,
+                            )
+                        else:
+                            sent = await app.send_message(
+                                chat_id=chat_id,
+                                text=text,
+                                reply_markup=keyboard,
+                            )
+                        media.message_id = sent.id
         except FileNotFoundError:
             await message.edit_text(_lang["error_no_file"].format(config.SUPPORT_CHAT))
             await self.play_next(chat_id)
