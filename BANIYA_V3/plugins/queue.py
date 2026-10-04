@@ -3,15 +3,10 @@
 # This file is part of AnonXMusic
 
 
-from pyrogram import filters, types
+from pyrogram import enums, filters, types
 
 from BANIYA_V3 import app, config, db, lang, queue
 from BANIYA_V3.helpers import Track, buttons, thumb
-from BANIYA_V3.utils.rich_utils import (
-    _html_caption_to_blocks,
-    _progress_row,
-    _random_styles,
-)
 
 
 @app.on_message(filters.command(["queue", "playing"]) & filters.group & ~app.bl_users)
@@ -23,15 +18,12 @@ async def _queue_func(_, m: types.Message):
     _reply = await m.reply_text(m.lang["queue_fetching"])
     _queue = queue.get_queue(m.chat.id)
     _media = _queue[0]
-
-    # Generate thumbnail
     _thumb = (
         await thumb.generate(_media)
         if isinstance(_media, Track)
         else config.DEFAULT_THUMB
     ) if config.THUMB_GEN else None
 
-    # Build the caption HTML (with premium emoji tags intact)
     _text = m.lang["queue_curr"].format(
         _media.url,
         _media.title[:50],
@@ -51,12 +43,16 @@ async def _queue_func(_, m: types.Message):
         _text += "</blockquote>"
 
     # ---------- Build rich message blocks ----------
+    from BANIYA_V3.utils.rich_utils import _html_caption_to_blocks
+
     blocks = []
     if _thumb:
-        blocks.append(types.InputRichBlockPhoto(photo=types.InputMediaPhoto(_thumb)))
+        blocks.append(
+            types.InputRichBlockPhoto(photo=types.InputMediaPhoto(_thumb))
+        )
     blocks += _html_caption_to_blocks(_text)
 
-    # Add the pause/resume toggle button as a rich button
+    # Add pause/resume toggle as a rich button
     _playing = await db.playing(m.chat.id)
     toggle_text = m.lang["playing"] if _playing else m.lang["paused"]
     blocks.append(
@@ -65,9 +61,9 @@ async def _queue_func(_, m: types.Message):
                 types.RichMessageButton(
                     text=toggle_text,
                     style=(
-                        types.ButtonStyle.SUCCESS
+                        enums.ButtonStyle.SUCCESS
                         if _playing
-                        else types.ButtonStyle.PRIMARY
+                        else enums.ButtonStyle.PRIMARY
                     ),
                     callback_data=(
                         f"controls pause {m.chat.id}"
@@ -79,12 +75,12 @@ async def _queue_func(_, m: types.Message):
         )
     )
 
-    # ---------- Send as rich message ----------
     rich = types.InputRichMessage(blocks=blocks)
+
+    # ---------- Send as rich message ----------
     try:
         await _reply.edit_text(rich_message=rich)
     except Exception:
-        # If editing fails, send fresh rich message
         try:
             await _reply.delete()
         except Exception:
@@ -95,8 +91,9 @@ async def _queue_func(_, m: types.Message):
                 rich_message=rich,
             )
         except Exception:
-            # Final fallback — plain text without emoji tags
-            plain = _text.replace("<u>", "").replace("</u>", "")
+            # Final fallback: plain text without tags
             import re as _re
-            plain = _re.sub(r"<emoji[^>]*>(.*?)</emoji>", r"\1", plain)
+            plain = _re.sub(r"<emoji[^>]*>(.*?)</emoji>", r"\1", _text)
+            plain = plain.replace("<u>", "").replace("</u>", "")
+            plain = plain.replace("<b>", "").replace("</b>", "")
             await m.reply_text(plain)
