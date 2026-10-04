@@ -87,7 +87,7 @@ class TgCall(PyTgCalls):
                     media.user,
                 )
 
-                # ---- Try rich message first ----
+                # ============ RICH MESSAGE ONLY ============
                 rich_sent = False
                 if _thumb:
                     try:
@@ -104,21 +104,15 @@ class TgCall(PyTgCalls):
                     except Exception as e:
                         logger.warning(f"[RICH] now-playing failed: {e}")
 
-                # ---- Fallback to classic edit/send ----
+                # ============ FALLBACK ONLY IF RICH FAILED ============
                 if not rich_sent:
+                    try:
+                        await message.delete()
+                    except Exception:
+                        pass
+
                     keyboard = buttons.controls(chat_id)
                     try:
-                        if _thumb:
-                            await message.edit_media(
-                                media=InputMediaPhoto(
-                                    media=_thumb,
-                                    caption=text,
-                                ),
-                                reply_markup=keyboard,
-                            )
-                        else:
-                            await message.edit_text(text, reply_markup=keyboard)
-                    except (ChatSendMediaForbidden, ChatSendPhotosForbidden, MessageIdInvalid):
                         if _thumb:
                             sent = await app.send_photo(
                                 chat_id=chat_id,
@@ -133,6 +127,8 @@ class TgCall(PyTgCalls):
                                 reply_markup=keyboard,
                             )
                         media.message_id = sent.id
+                    except Exception as e:
+                        logger.warning(f"[CLASSIC] fallback also failed: {e}")
         except FileNotFoundError:
             await message.edit_text(_lang["error_no_file"].format(config.SUPPORT_CHAT))
             await self.play_next(chat_id)
