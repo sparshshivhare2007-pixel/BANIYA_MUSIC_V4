@@ -11,6 +11,8 @@ from pyrogram import enums, errors, types
 from BANIYA_V3 import lang as _lang_obj, logger
 
 
+# ---------------------------------------------------------------- helpers
+
 def _time_to_seconds(t) -> int:
     if not t:
         return 0
@@ -21,20 +23,32 @@ def _time_to_seconds(t) -> int:
     return sum(p * 60 ** i for i, p in enumerate(reversed(parts)))
 
 
-# Strip <emoji id='...'>X</emoji> to X, and parse <b>/<a href> normally
-_EMOJI_RE = re.compile(r"<emoji id='[^']*'>(.*?)</emoji>", re.IGNORECASE)
-_EMOJI_RE_DQ = re.compile(r'<emoji id="[^"]*">(.*?)</emoji>', re.IGNORECASE)
-_TAG_RE = re.compile(r"<(/?)(b|a)(?:\s+href=([^>]+))?>", re.IGNORECASE)
+# Strip <emoji id='...'>X</emoji> and <emoji id="...">X</emoji> → X
+_EMOJI_RE_SQ = re.compile(r"<emoji id='[^']*'>(.*?)</emoji>", re.IGNORECASE | re.DOTALL)
+_EMOJI_RE_DQ = re.compile(r'<emoji id="[^"]*">(.*?)</emoji>', re.IGNORECASE | re.DOTALL)
 
 
 def _strip_emoji_tags(text: str) -> str:
-    """Replace <emoji id='...'>X</emoji> with X."""
-    text = _EMOJI_RE.sub(r"\1", text)
+    """Replace <emoji id='...'>X</emoji> with X (glyph only)."""
+    if not text:
+        return text
+    text = _EMOJI_RE_SQ.sub(r"\1", text)
     text = _EMOJI_RE_DQ.sub(r"\1", text)
     return text
 
 
+# One pass regex — order matters: emoji (self-closing-ish) first, then b/i/u, then a
+_TAG_RE = re.compile(
+    r"<(/?)(b|i|u|a)(?:\s+href=([^>]+))?>",
+    re.IGNORECASE,
+)
+
+
 def _parse_inline(segment):
+    """
+    Parse a single line of HTML-ish markup into rich text nodes.
+    Supports: <b>, <i>, <u>, <a href="...">, and raw text.
+    """
     parts = []
     stack = []
     pos = 0
@@ -65,6 +79,19 @@ def _parse_inline(segment):
 
             if open_tag == "b":
                 parts.append(types.RichTextBold(text=inner))
+            elif open_tag == "i":
+                # RichTextItalic may or may not exist depending on Pyrogram version
+                italic_cls = getattr(types, "RichTextItalic", None)
+                if italic_cls is not None:
+                    parts.append(italic_cls(text=inner))
+                else:
+                    parts.append(inner)
+            elif open_tag == "u":
+                underline_cls = getattr(types, "RichTextUnderline", None)
+                if underline_cls is not None:
+                    parts.append(underline_cls(text=inner))
+                else:
+                    parts.append(inner)
             elif open_tag == "a":
                 parts.append(types.RichTextUrl(text=inner, url=url))
 
@@ -95,7 +122,8 @@ def _balance_lines(caption_html):
 
 
 def _html_caption_to_blocks(caption_html):
-    # First, strip <emoji> tags — replace with their glyph text
+    # 1) strip <emoji> tags → keep glyph
+    # 2) parse each line into rich text nodes
     clean = _strip_emoji_tags(caption_html)
     return [
         types.InputRichBlockParagraph(text=_parse_inline(line))
@@ -152,7 +180,7 @@ def _progress_row(played, dur, style):
             types.RichMessageButton(
                 text=_progress_line(played, dur),
                 style=style,
-                callback_data="controls status",  # harmless, no-op
+                callback_data="controls status",
             )
         ]
     )
@@ -161,15 +189,13 @@ def _progress_row(played, dur, style):
 def _control_rows(lang_dict, chat_id, playing, styles):
     replay_style, toggle_style, skip_style, queue_style = styles
 
-    # These texts come from en.json, fallback to defaults
-    replay_text = (lang_dict or {}).get("play_replay", "Replay")
-    pause_text  = (lang_dict or {}).get("paused", "Pause")
-    resume_text = (lang_dict or {}).get("playing", "Resume")
-    skip_text   = (lang_dict or {}).get("skipped", "Skip")
-    queue_text  = (lang_dict or {}).get("queue_curr", "Queue")
+    replay_text = (lang_dict or {}).get("play_replay", "↻ Replay")
+    pause_text  = (lang_dict or {}).get("paused", "II Pause")
+    resume_text = (lang_dict or {}).get("playing", "▶ Resume")
+    skip_text   = (lang_dict or {}).get("skipped", "‣‣I Skip")
+    queue_text  = (lang_dict or {}).get("queue_curr", "≡ Queue")
+    close_text  = (lang_dict or {}).get("close", "✖ Close")
 
-    # ⚠️ IMPORTANT: callback_data uses "controls" prefix so the
-    # existing @app.on_callback_query(filters.regex("controls")) handles it.
     toggle = types.RichMessageButton(
         text=pause_text if playing else resume_text,
         style=toggle_style,
@@ -178,7 +204,9 @@ def _control_rows(lang_dict, chat_id, playing, styles):
             else f"controls resume {chat_id}"
         ),
     )
+
     return [
+        # Row 1: Replay / Pause-Resume / Skip
         types.InputRichBlockButtons(
             buttons=[
                 types.RichMessageButton(
@@ -194,6 +222,7 @@ def _control_rows(lang_dict, chat_id, playing, styles):
                 ),
             ]
         ),
+        # Row 2: Queue
         types.InputRichBlockButtons(
             buttons=[
                 types.RichMessageButton(
@@ -203,8 +232,20 @@ def _control_rows(lang_dict, chat_id, playing, styles):
                 ),
             ]
         ),
+        # Row 3: Close
+        types.InputRichBlockButtons(
+            buttons=[
+                types.RichMessageButton(
+                    text=close_text,
+                    style=enums.ButtonStyle.DANGER,
+                    callback_data=f"controls close {chat_id}",
+                ),
+            ]
+        ),
     ]
 
+
+# ---------------------------------------------------------------- public API
 
 def build_now_playing_blocks(photo, caption_html, chat_id, lang_dict=None,
                              played=None, dur=None, playing=True):
