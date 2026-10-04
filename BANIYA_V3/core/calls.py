@@ -49,11 +49,20 @@ class TgCall(PyTgCalls):
     ) -> None:
         client = await db.get_assistant(chat_id)
         _lang = await lang.get_lang(chat_id)
-        _thumb = (
-            await thumb.generate(media)
-            if isinstance(media, Track)
-            else config.DEFAULT_THUMB
-        ) if config.THUMB_GEN else None
+
+        # Always have a thumbnail (fallback to DEFAULT_THUMB)
+        _thumb = None
+        if config.THUMB_GEN:
+            try:
+                _thumb = (
+                    await thumb.generate(media)
+                    if isinstance(media, Track)
+                    else config.DEFAULT_THUMB
+                )
+            except Exception:
+                _thumb = config.DEFAULT_THUMB
+        if not _thumb:
+            _thumb = config.DEFAULT_THUMB
 
         if not media.file_path:
             await message.edit_text(_lang["error_no_file"].format(config.SUPPORT_CHAT))
@@ -87,48 +96,16 @@ class TgCall(PyTgCalls):
                     media.user,
                 )
 
-                # ============ RICH MESSAGE ONLY ============
-                rich_sent = False
-                if _thumb:
-                    try:
-                        from BANIYA_V3.utils.rich_utils import send_now_playing_rich
-                        sent = await send_now_playing_rich(
-                            client=app,
-                            chat_id=chat_id,
-                            photo=_thumb,
-                            caption_html=text,
-                            replace=message,
-                        )
-                        media.message_id = sent.id
-                        rich_sent = True
-                    except Exception as e:
-                        logger.warning(f"[RICH] now-playing failed: {e}")
-
-                # ============ FALLBACK ONLY IF RICH FAILED ============
-                if not rich_sent:
-                    try:
-                        await message.delete()
-                    except Exception:
-                        pass
-
-                    keyboard = buttons.controls(chat_id)
-                    try:
-                        if _thumb:
-                            sent = await app.send_photo(
-                                chat_id=chat_id,
-                                photo=_thumb,
-                                caption=text,
-                                reply_markup=keyboard,
-                            )
-                        else:
-                            sent = await app.send_message(
-                                chat_id=chat_id,
-                                text=text,
-                                reply_markup=keyboard,
-                            )
-                        media.message_id = sent.id
-                    except Exception as e:
-                        logger.warning(f"[CLASSIC] fallback also failed: {e}")
+                # ============ RICH MESSAGE ONLY (no fallback) ============
+                from BANIYA_V3.utils.rich_utils import send_now_playing_rich
+                sent = await send_now_playing_rich(
+                    client=app,
+                    chat_id=chat_id,
+                    photo=_thumb,
+                    caption_html=text,
+                    replace=message,
+                )
+                media.message_id = sent.id
         except FileNotFoundError:
             await message.edit_text(_lang["error_no_file"].format(config.SUPPORT_CHAT))
             await self.play_next(chat_id)
