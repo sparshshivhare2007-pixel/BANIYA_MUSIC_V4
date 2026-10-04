@@ -23,8 +23,6 @@ def _time_to_seconds(t) -> int:
     return sum(p * 60 ** i for i, p in enumerate(reversed(parts)))
 
 
-# One regex catches: <b>, <i>, <u>, <a href="...">, and <emoji id="...">
-# For <emoji>, the "id" is captured in the same slot as href for <a>.
 _TAG_RE = re.compile(
     r"<(/?)(b|i|u|a|emoji)(?:\s+(?:href|id)=([^>]+))?>",
     re.IGNORECASE,
@@ -32,11 +30,6 @@ _TAG_RE = re.compile(
 
 
 def _parse_inline(segment):
-    """
-    Parse a single line of HTML-ish markup into rich text nodes.
-    Supports: <b>, <i>, <u>, <a href="...">, <emoji id="...">, raw text.
-    Premium emoji are preserved as RichTextCustomEmoji.
-    """
     parts = []
     stack = []
     pos = 0
@@ -76,7 +69,6 @@ def _parse_inline(segment):
             elif open_tag == "a":
                 parts.append(types.RichTextUrl(text=inner, url=url_or_id))
             elif open_tag == "emoji":
-                # Premium emoji — keep as RichTextCustomEmoji
                 emoji_id = str(url_or_id) if url_or_id else None
                 alt = inner if isinstance(inner, str) and inner else "🙂"
                 if not emoji_id:
@@ -119,8 +111,6 @@ def _balance_lines(caption_html):
 
 
 def _html_caption_to_blocks(caption_html):
-    # Keep <emoji> tags intact so they render as PREMIUM emoji.
-    # No stripping — the parser converts them into RichTextCustomEmoji.
     return [
         types.InputRichBlockParagraph(text=_parse_inline(line))
         for line in _balance_lines(caption_html)
@@ -189,7 +179,7 @@ def _control_rows(lang_dict, chat_id, playing, styles):
     pause_text  = (lang_dict or {}).get("paused", "II Pause")
     resume_text = (lang_dict or {}).get("playing", "▶ Resume")
     skip_text   = (lang_dict or {}).get("skipped", "‣‣I Skip")
-    queue_text  = (lang_dict or {}).get("queue_curr", "≡ Queue")
+    queue_text  = "≡ ǫᴜᴇᴜᴇ"          # <-- FIXED: hardcoded, no queue_curr
     close_text  = (lang_dict or {}).get("close", "✖ Close")
 
     toggle = types.RichMessageButton(
@@ -202,7 +192,6 @@ def _control_rows(lang_dict, chat_id, playing, styles):
     )
 
     return [
-        # Row 1: Replay / Pause-Resume / Skip
         types.InputRichBlockButtons(
             buttons=[
                 types.RichMessageButton(
@@ -218,7 +207,6 @@ def _control_rows(lang_dict, chat_id, playing, styles):
                 ),
             ]
         ),
-        # Row 2: Queue
         types.InputRichBlockButtons(
             buttons=[
                 types.RichMessageButton(
@@ -228,7 +216,6 @@ def _control_rows(lang_dict, chat_id, playing, styles):
                 ),
             ]
         ),
-        # Row 3: Close
         types.InputRichBlockButtons(
             buttons=[
                 types.RichMessageButton(
